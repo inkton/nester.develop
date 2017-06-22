@@ -223,11 +223,10 @@ function buildNestProject(nestProject, statusBarItem) : any {
 /**
  * up the project
  */
-function createNestProject(nestProject, statusBarItem) : any
+function createNestAssets(nestProject, launchConfig, statusBarItem) : any
 {
-    progressStep("Attaching " + nestProject.container_name + ", this may take a minute or two ...", statusBarItem);
     let deferred = Q.defer();
-    
+
     exec('docker port ' + nestProject.container_name + '  22', (error, stdout, stderr) => {
 
         if (error !== null) {
@@ -305,50 +304,10 @@ function createNestProject(nestProject, statusBarItem) : any
             }
         });
 
-        /* 
-            Add this to see logs
-                "logging": {
-                    "engineLogging": true
-                },
-        */
-        var launchConfig = {
-            version: '0.2.0',
-            configurations: [
-                {
-                    "name": "Attach Nest",
-                    "type": "coreclr",
-                    "request": "launch",
-                    "cwd": "/var/app/source/n1/",
-                    "program": "/var/app/source/n1/bin/Debug/netcoreapp2.0/n1.dll",	
-                    "sourceFileMap": {
-                        "/var/app/source/n1" : "${workspaceRoot}"
-                    },	
-                    "env": {
-                        "ASPNETCORE_ENVIRONMENT": "Development"
-                    },							
-                    "pipeTransport": {
-                        "debuggerPath": "/vsdbg/vsdbg",
-                        "pipeProgram": "ssh",
-                        "pipeCwd": "${workspaceRoot}",
-                        "pipeArgs": [
-                            "-i",
-                            "c:\\Users\\rajitha\\Documents\\inkton\\testbed\\Sample8/.contact_key",
-                            "-o",
-                            "UserKnownHostsFile=/dev/null",
-                            "-o",
-                            "StrictHostKeyChecking=no",
-                            "root@192.168.99.100",
-                            "-p",
-                            "32811"
-                        ],
-                        "quoteArgs": true
-                    }	
-                }   
-            ]
-        };
-
         launchConfig['configurations'][0]['cwd'] = nestContainer;
-        launchConfig['configurations'][0]['program'] = nestProject.environment['NEST_FOLDER_PUBLISH'];
+        launchConfig['configurations'][0]['program'] = nestProject.environment['NEST_FOLDER_PUBLISH'];     
+        launchConfig['configurations'][0].sourceFileMap = {};
+        launchConfig['configurations'][0].sourceFileMap[nestContainer] = "${workspaceRoot}" ;
 
         var parser = new xml2js.Parser();
         fs.readFile(nestHost + '/' + nestTag + '.csproj', function(err, data) {
@@ -421,6 +380,134 @@ IdentityFile ${rootFolder}/.contact_key`, 'utf-8', function(error) {
     });
 
    return deferred.promise;
+}
+
+/**
+ * up the project
+ */
+function createNestProject(nestProject, statusBarItem) : any
+{
+    progressStep("Attaching " + nestProject.container_name + " ...", statusBarItem);
+    var launchConfig = null;
+
+    if (nestProject.environment['NEST_PLATFORM_TAG'] === 'worker')
+    {
+            /* 
+                Add this to see logs
+                    "logging": {
+                        "engineLogging": true
+                    },
+            */
+            launchConfig = {
+                version: '0.2.0',
+                configurations: [
+                    {
+                        "name": "Attach Nest",
+                        "type": "coreclr",
+                        "request": "launch",
+                        "cwd": "<-fill->",
+                        "program": "<-fill->",	
+                        "sourceFileMap": {
+                            "source" : "${workspaceRoot}"
+                        },	
+                        "env": {
+                            "ASPNETCORE_ENVIRONMENT": "Development"
+                        },							
+                        "pipeTransport": {
+                            "debuggerPath": "/vsdbg/vsdbg",
+                            "pipeProgram": "ssh",
+                            "pipeCwd": "${workspaceRoot}",
+                            "pipeArgs": [
+
+                            ],
+                            "quoteArgs": true
+                        }	
+                    }   
+                ]
+            };
+
+            return createNestAssets(nestProject, launchConfig, statusBarItem);
+    }
+    else
+    {
+        let deferred = Q.defer();
+        exec('docker port ' + nestProject.container_name + '  5000', (error, stdout, stderr) => {
+
+            if (error !== null) {
+                progressStepFail('Failed to get the HTTP port', statusBarItem);
+                deferred.reject(nestProject);
+                return;
+            }
+            
+            var arr = stdout.trim().split(":");
+            nestProject.environment['NEST_HTTP_PORT'] = arr[1];
+
+            /* 
+                Add this to see logs
+                    "logging": {
+                        "engineLogging": true
+                    },
+            */
+            launchConfig = {
+                version: '0.2.0',
+                configurations: [
+                    {
+                        "name": "Attach Nest",
+                        "type": "coreclr",
+                        "request": "launch",
+                        "cwd": "<-fill->",
+                        "program": "<-fill->",	
+                        "sourceFileMap": {
+                            "source" : "${workspaceRoot}"
+                        },	
+                        "launchBrowser": {
+                            "enabled": true,
+                            "args": "http://<-fill->",
+                            "windows": {
+                                "command": "cmd.exe",
+                                "args": "/C start http://<-fill->"
+                            },
+                            "osx": {
+                                "command": "open"
+                            },
+                            "linux": {
+                                "command": "xdg-open"
+                            }
+                        },	                    
+                        "env": {
+                            "ASPNETCORE_ENVIRONMENT": "Development",
+                            "ASPNETCORE_URLS": "http://*:5000"
+                        },							
+                        "pipeTransport": {
+                            "debuggerPath": "/vsdbg/vsdbg",
+                            "pipeProgram": "ssh",
+                            "pipeCwd": "${workspaceRoot}",
+                            "pipeArgs": [
+
+                            ],
+                            "quoteArgs": true
+                        }	
+                    }   
+                ]
+            };
+
+            var browsePage = "http://" + nestProject.environment['NEST_DOCKER_MACHINE_IP'] + ":" + nestProject.environment['NEST_HTTP_PORT'];
+
+            launchConfig['configurations'][0].launchBrowser.args = browsePage;
+            launchConfig['configurations'][0].launchBrowser.windows.args = "/C start " + browsePage;
+        
+            createNestAssets(nestProject, launchConfig, statusBarItem)
+                .then(function (result) {
+                    deferred.resolve(nestProject);
+                })
+                .catch(function (error) {
+                    deferred.reject(nestProject);
+                    return;
+                });
+        });
+
+       return deferred.promise;    
+    }
 }
 
 /**
