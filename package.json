@@ -16,7 +16,9 @@
     "onCommand:extension.inkton-nest.clean",
     "onCommand:extension.inkton-nest.remap",    
     "onCommand:extension.inkton-nest.build",
-    "onCommand:extension.inkton-nest.scaffold"
+    "onCommand:extension.inkton-nest.restore",    
+    "onCommand:extension.inkton-nest.scaffold",
+    "onCommand:extension.inkton-nest.help"    
   ],
   "main": "./out/src/extension",
   "contributes": {
@@ -42,8 +44,16 @@
         "title": "Nest Build"
       },
       {
+        "command": "extension.inkton-nest.restore",
+        "title": "Nest Restore"
+      },
+      {
         "command": "extension.inkton-nest.scaffold",
         "title": "Nest Scaffold"
+      },
+      {
+        "command": "extension.inkton-nest.help",
+        "title": "Nest Help"
       }
     ]
   },
