@@ -5,8 +5,8 @@ import * as vscode from 'vscode';
 import path = require('path');
 import {window, commands, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem, TextDocument} from 'vscode';
 
-var spawn = require('child-process-promise').spawn;
-var exec = require('child-process-promise').exec;
+var execPromise = require('child-process-promise').exec;
+var exec = require('child_process').exec;
 var yaml = require('yamljs');
 var fs = require("fs");
 var xml2js = require('xml2js');
@@ -162,7 +162,7 @@ function restoreNestProject(nestProject, statusBarItem) : any {
         (error, stdout, stderr) => {
 
         if (error !== null) {
-            progressStepFail(stderr, statusBarItem);
+            progressStepFail(stdout, statusBarItem);
             deferred.reject(nestProject);
             return;
         }
@@ -208,7 +208,7 @@ function buildNestProject(nestProject, statusBarItem) : any {
         (error, stdout, stderr) => {
 
         if (error !== null) {
-            progressStepFail(stderr, statusBarItem);
+            progressStepFail(stdout, statusBarItem);
             deferred.reject(nestProject);                    
             return;
         }
@@ -319,12 +319,12 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
             }
         });
 
-        const nestShadowContainer = '/var/app_shadow' + nestFolder;
+        const nestShadowApp = '/var/app_shadow' + nestFolder;
 
-        launchConfig['configurations'][0]['cwd'] = nestShadowContainer;
+        launchConfig['configurations'][0]['cwd'] = nestShadowApp;
         launchConfig['configurations'][0]['program'] = nestProject.environment['NEST_FOLDER_PUBLISH'];     
         launchConfig['configurations'][0].sourceFileMap = {};
-        launchConfig['configurations'][0].sourceFileMap[nestShadowContainer] = "${workspaceRoot}" ;
+        launchConfig['configurations'][0].sourceFileMap[nestShadowApp] = "${workspaceRoot}" ;
 
         var parser = new xml2js.Parser();
         fs.readFile(nestHost + '/' + nestTag + '.csproj', function(err, data) {
@@ -492,8 +492,6 @@ function createNestProject(nestProject, statusBarItem) : any
                             }
                         },	                    
                         "env": {
-                            "ASPNETCORE_ENVIRONMENT": "Development",
-                            "ASPNETCORE_URLS": "http://*:5000"
                         },							
                         "pipeTransport": {
                             "debuggerPath": "/vsdbg/vsdbg",
@@ -509,10 +507,13 @@ function createNestProject(nestProject, statusBarItem) : any
             };
 
             var browsePage = "http://" + nestProject.environment['NEST_DOCKER_MACHINE_IP'] + ":" + nestProject.environment['NEST_HTTP_PORT'];
+            nestProject.environment['ASPNETCORE_ENVIRONMENT'] = "Development";
+            nestProject.environment['ASPNETCORE_URLS'] = "http://*:5000";
 
             launchConfig['configurations'][0].launchBrowser.args = browsePage;
-            launchConfig['configurations'][0].launchBrowser.windows.args = "/C start " + browsePage;
-        
+            launchConfig['configurations'][0].launchBrowser.windows.args = "/C start " + browsePage;            
+            launchConfig['configurations'][0].env = nestProject.environment;
+
             createNestAssets(nestProject, launchConfig, statusBarItem)
                 .then(function (result) {
                     deferred.resolve(nestProject);
@@ -811,7 +812,7 @@ function scaffold() : any {
                         nestServices['byKey'][key].environment['NEST_DOCKER_MACHINE_IP'] = dockerMachineIP;
                         progressStep("Attaching " + nestServices['byKey'][key].container_name + ", this may take a minute or two ...", statusBarItem);
 
-                        exec('docker exec ' + nestServices['byKey'][key].container_name + ' nester app attach')
+                        execPromise('docker exec ' + nestServices['byKey'][key].container_name + ' nester app attach')
                             .then(function (result) {
                                 progressStep("Attach ok ..., creating project " + nestServices['byKey'][key].container_name, statusBarItem);
 
@@ -911,7 +912,7 @@ export function activate(context: vscode.ExtensionContext) {
         let helpDisposable = vscode.commands.registerCommand('extension.inkton-nest.help', () => help( ) );        
         let restoreDisposable = vscode.commands.registerCommand('extension.inkton-nest.restore', () => restore( ) );        
         let scaffoldDisposable = vscode.commands.registerCommand('extension.inkton-nest.scaffold', () =>
-            exec('git --version')
+            execPromise('git --version')
                 .then(function (result) {
                     var stdout = result.stdout;
                     var thenum = stdout.replace( /^\D+/g, '').split(".");
