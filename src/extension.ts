@@ -322,7 +322,7 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
         const nestShadowApp = '/var/app_shadow' + nestFolder;
 
         launchConfig['configurations'][0]['cwd'] = nestShadowApp;
-        launchConfig['configurations'][0]['program'] = nestProject.environment['NEST_FOLDER_PUBLISH'];     
+        launchConfig['configurations'][0]['program'] = nestShadowApp;     
         launchConfig['configurations'][0].sourceFileMap = {};
         launchConfig['configurations'][0].sourceFileMap[nestShadowApp] = "${workspaceRoot}" ;
 
@@ -331,8 +331,9 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
             parser.parseString(data, function (error, result) {
 
                 progressStep("Emitting " + nestHost + '/.vscode/launch.json', statusBarItem);        
-                
-                launchConfig['configurations'][0]['program'] += '/' + nestTag + '.dll';
+                                
+                launchConfig['configurations'][0]['program'] +=  '/bin/Debug/' + 
+                    result.Project.PropertyGroup[0].TargetFramework[0] + '/' + nestTag + '.dll';                
                 launchConfig['configurations'][0]['pipeTransport'].pipeArgs = [
                         '-i', 
                         nestProject.environment['NEST_FOLDER_ROOT'] + '/.contact_key',
@@ -406,48 +407,64 @@ function createNestProject(nestProject, statusBarItem) : any
 {
     progressStep("Attaching " + nestProject.container_name + " ...", statusBarItem);
     var launchConfig = null;
+    let deferred = Q.defer();
 
     if (nestProject.environment['NEST_PLATFORM_TAG'] === 'worker')
     {
-            /* 
-                Add this to see logs
-                    "logging": {
-                        "engineLogging": true
-                    },
-            */
-            launchConfig = {
-                version: '0.2.0',
-                configurations: [
-                    {
-                        "name": "Attach Nest",
-                        "type": "coreclr",
-                        "request": "launch",
-                        "cwd": "<-fill->",
-                        "program": "<-fill->",	
-                        "sourceFileMap": {
-                            "source" : "${workspaceRoot}"
-                        },	
-                        "env": {
-                            "ASPNETCORE_ENVIRONMENT": "Development"
-                        },							
-                        "pipeTransport": {
-                            "debuggerPath": "/vsdbg/vsdbg",
-                            "pipeProgram": "ssh",
-                            "pipeCwd": "${workspaceRoot}",
-                            "pipeArgs": [
+        /* 
+            Add this to see logs
+                "logging": {
+                    "engineLogging": true
+                },
+        */
+        launchConfig = {
+            version: '0.2.0',
+            configurations: [
+                {
+                    "name": "Attach Nest",
+                    "type": "coreclr",
+                    "request": "launch",
+                    "cwd": "<-fill->",
+                    "program": "<-fill->",	
+                    "sourceFileMap": {
+                        "source" : "${workspaceRoot}"
+                    },	
+                    "env": {
+                    },						
+                    "pipeTransport": {
+                        "debuggerPath": "/vsdbg/vsdbg",
+                        "pipeProgram": "ssh",
+                        "pipeCwd": "${workspaceRoot}",
+                        "pipeArgs": [
 
-                            ],
-                            "quoteArgs": true
-                        }	
-                    }   
-                ]
-            };
+                        ],
+                        "quoteArgs": true
+                    }	
+                }   
+            ]
+        };
 
-            return createNestAssets(nestProject, launchConfig, statusBarItem);
+        launchConfig['configurations'][0].env = nestProject.environment;
+        
+        Object.keys(launchConfig['configurations'][0].env).forEach(function(key, index) {
+            if (!isNaN(launchConfig['configurations'][0].env[key]))
+            {
+                launchConfig['configurations'][0].env[key] = 
+                    launchConfig['configurations'][0].env[key].toString();
+            }
+        });
+
+        createNestAssets(nestProject, launchConfig, statusBarItem)
+            .then(function (result) {
+                deferred.resolve(nestProject);
+            })
+            .catch(function (error) {
+                deferred.reject(nestProject);
+                return;
+            });
     }
     else
     {
-        let deferred = Q.defer();
         exec('docker port ' + nestProject.container_name + '  5000', (error, stdout, stderr) => {
 
             if (error !== null) {
@@ -513,6 +530,14 @@ function createNestProject(nestProject, statusBarItem) : any
             launchConfig['configurations'][0].launchBrowser.args = browsePage;
             launchConfig['configurations'][0].launchBrowser.windows.args = "/C start " + browsePage;            
             launchConfig['configurations'][0].env = nestProject.environment;
+            
+            Object.keys(launchConfig['configurations'][0].env).forEach(function(key, index) {
+                if (!isNaN(launchConfig['configurations'][0].env[key]))
+                {
+                    launchConfig['configurations'][0].env[key] = 
+                        launchConfig['configurations'][0].env[key].toString();
+                }
+            });
 
             createNestAssets(nestProject, launchConfig, statusBarItem)
                 .then(function (result) {
@@ -523,9 +548,9 @@ function createNestProject(nestProject, statusBarItem) : any
                     return;
                 });
         });
-
-       return deferred.promise;    
     }
+
+    return deferred.promise;    
 }
 
 /**
@@ -619,8 +644,7 @@ function clean() : any {
         console.log(stderr);
         statusBarItem.text = "Attaching the container app ..."
 
-        exec('docker exec ' + nestProject.container_name + ' rm -rf ' + 
-            nestProject.environment['NEST_FOLDER_PUBLISH'],
+        exec('rm -rf {obj,bin} ', { 'cwd' : workspace.rootPath },
             (error, stdout, stderr) => {
 
             if (error !== null) {
@@ -647,67 +671,25 @@ function clean() : any {
  * up the remap
  */
 function remap() : any {
-    var statusBarItem = progressStart("Remapping ports ...");
+    const nestProject = getNestProject();
+    if (nestProject === null)
+        return false;
+
     let deferred = Q.defer();
+    var statusBarItem = progressStart("Remapping ...");
 
-    var nestServices = getNestServices(statusBarItem);
-    if (!nestServices || nestServices['names'].length === 0)
-    {
-        progressStepFail('No nest projects found', statusBarItem);
-        deferred.reject();        
-        return;
-    }
-
-    exec('docker-machine ip', 
-        (error, stdout, stderr) => {
-
-        if (error !== null) {
-            progressStepFail(stderr, statusBarItem);
-            deferred.reject();                
-            return;
-        }
-
-        var dockerMachineIP = stdout.trim();
-        progressStep("Docker IP is ... " + dockerMachineIP, statusBarItem);
-
-        var buildsComplete = 0;
-        Object.keys(nestServices['byKey']).forEach(function(key, index) {
-            if (nestServices['byKey'][key].environment['NEST_TAG'])
-            {
-                nestServices['byKey'][key].environment['NEST_DOCKER_MACHINE_IP'] = dockerMachineIP;                
-                progressStep("Remapping " + nestServices['byKey'][key].container_name, statusBarItem);
-
-                exec('docker-compose up -d', { 'cwd' : nestServices['byKey'][key].environment['NEST_FOLDER_ROOT'] }, 
-                    (error, stdout, stderr) => {
-                    
-                    if (error !== null) {                        
-                        progressStepFail(stderr, statusBarItem);
-                        deferred.reject(nestServices);                
-                        return;
-                    }
-
-                    createNestProject(nestServices['byKey'][key], statusBarItem)
-                        .then(function (result) {
-                            ++buildsComplete;
-                            if (buildsComplete >= nestServices['names'].length)
-                            {
-                                deferred.resolve(nestServices);
-                                progressStep('-------------------------------------', statusBarItem);
-                                progressStep('    The ports have been re-mapped    ', statusBarItem);
-                                progressStep('-------------------------------------', statusBarItem);
-                                progressStep('Nest + Help to list avaiable Nest commands.', statusBarItem);                                                
-                                progressEnd(statusBarItem);                                                                                                            
-                            }
-                        })
-                        .catch(function (error) {
-                            progressStepFail(nestServices['byKey'][key].container_name + ' project remap failed', statusBarItem);
-                            deferred.reject(nestServices);
-                            return;
-                        });
-                });                
-            }
-        });
-    });
+    createNestProject(nestProject, statusBarItem)
+        .then(function (value) {
+            progressStep('-------------------------------------', statusBarItem);
+            progressStep('    The project has been remapped    ', statusBarItem);
+            progressStep('-------------------------------------', statusBarItem);
+            progressStep('Nest + Help to list avaiable Nest commands.', statusBarItem);                                                
+            progressEnd(statusBarItem);
+            deferred.resolve(nestProject);            
+        })
+        .catch(function (error) {
+            deferred.reject();            
+        });   
 
    return deferred.promise;
 }
@@ -720,6 +702,7 @@ function restore() : any {
     if (nestProject === null)
         return false;
 
+    let deferred = Q.defer();
     var statusBarItem = progressStart("Restoring ...");
 
     restoreNestProject(nestProject, statusBarItem)
@@ -728,10 +711,14 @@ function restore() : any {
             progressStep('    The project has been restored    ', statusBarItem);
             progressStep('-------------------------------------', statusBarItem);
             progressStep('Nest + Help to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);                                                                            
+            progressEnd(statusBarItem);
+            deferred.resolve(nestProject);                                                                                     
         })
         .catch(function (error) {
+            deferred.reject();            
         });    
+
+   return deferred.promise;        
 }
 
 /**
@@ -742,6 +729,7 @@ function build() : any {
     if (nestProject === null)
         return false;
 
+    let deferred = Q.defer();
     var statusBarItem = progressStart("Building ...");
 
     buildNestProject(nestProject, statusBarItem)
@@ -750,10 +738,14 @@ function build() : any {
             progressStep('      The project has been built     ', statusBarItem);
             progressStep('-------------------------------------', statusBarItem);
             progressStep('Nest + Help to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);                                                                            
+            progressEnd(statusBarItem);
+            deferred.resolve(nestProject);            
         })
         .catch(function (error) {
+            deferred.reject();                            
         });
+
+   return deferred.promise;        
 }
 
 /**
