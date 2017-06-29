@@ -319,12 +319,14 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
             }
         });
 
+        const rootFolder = nestProject.environment['NEST_FOLDER_ROOT'];
         const nestShadowApp = '/var/app_shadow' + nestFolder;
 
         launchConfig['configurations'][0]['cwd'] = nestShadowApp;
         launchConfig['configurations'][0]['program'] = nestShadowApp;     
         launchConfig['configurations'][0].sourceFileMap = {};
         launchConfig['configurations'][0].sourceFileMap[nestShadowApp] = "${workspaceRoot}" ;
+        launchConfig['configurations'][0].sourceFileMap['/var/app_shadow/source/shared'] = rootFolder + '/source/shared';
 
         var parser = new xml2js.Parser();
         fs.readFile(nestHost + '/' + nestTag + '.csproj', function(err, data) {
@@ -348,7 +350,6 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
                 
                 const appTag = nestProject.environment['NEST_APP_TAG'];
                 const contactId = nestProject.environment['NEST_CONTACT_ID'];
-                const rootFolder = nestProject.environment['NEST_FOLDER_ROOT'];
 
                 fs.writeFile(rootFolder + '/.ssh_config', 
 `Host nest
@@ -772,7 +773,7 @@ function scaffold() : any {
             return;
         }
 
-        const workspace = vscode.workspace;
+        const rootFolder = getRootFolder();
         var dockerMachineIP = stdout.trim();
 
         progressStep("Docker IP is ... " + dockerMachineIP, statusBarItem);
@@ -780,10 +781,10 @@ function scaffold() : any {
         progressStep("The docker images will be downloaded and built", statusBarItem);        
         progressStep("This may take a while, please wait ...", statusBarItem);
 
-        exec('docker-compose down', { 'cwd' : workspace.rootPath }, 
+        exec('docker-compose down', { 'cwd' : rootFolder }, 
             (error, stdout, stderr) => {
             
-            exec('docker-compose up -d', { 'cwd' : workspace.rootPath }, 
+            exec('docker-compose up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
                 
                 if (error !== null) {
@@ -827,12 +828,32 @@ function scaffold() : any {
                                                             ++buildsComplete;
                                                             if (buildsComplete >= nestServices['names'].length)
                                                             {
-                                                                deferred.resolve(nestServices);
-                                                                progressStep('-------------------------------------', statusBarItem);
-                                                                progressStep('      The scaffold is in place       ', statusBarItem);
-                                                                progressStep('-------------------------------------', statusBarItem);
-                                                                progressStep('Nest + Help to list avaiable Nest commands.', statusBarItem);                                                
-                                                                progressEnd(statusBarItem);                                                                            
+                                                                progressStep("Setting shared area upstream.", statusBarItem);        
+
+                                                                var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && `.replace(/\\/g,"/");
+                                                                gitInit += " git fetch &&";
+                                                                gitInit += ` git branch --set-upstream-to=origin/shared-master shared-master`;
+                                                                var sharedFolder = rootFolder + "/source/shared";
+
+                                                                exec(gitInit, { 'cwd' : sharedFolder}, 
+                                                                    (error, stdout, stderr) => {
+
+                                                                    if (error !== null) {
+                                                                        progressStepFail('Failed to init git', statusBarItem);
+                                                                        deferred.reject(nestServices);
+                                                                        return;
+                                                                    }
+
+                                                                    console.log(stdout);
+                                                                    console.log(stderr);
+
+                                                                    deferred.resolve(nestServices);
+                                                                    progressStep('-------------------------------------', statusBarItem);
+                                                                    progressStep('      The scaffold is in place       ', statusBarItem);
+                                                                    progressStep('-------------------------------------', statusBarItem);
+                                                                    progressStep('Nest + Help to list avaiable Nest commands.', statusBarItem);                                                
+                                                                    progressEnd(statusBarItem);                                                                    
+                                                                });
                                                             }
                                                         })
                                                         .catch(function (error) {
