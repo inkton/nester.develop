@@ -14,8 +14,9 @@
     "onCommand:extension.inkton-nest.deploy",
     "onCommand:extension.inkton-nest.select",
     "onCommand:extension.inkton-nest.clean",
-    "onCommand:extension.inkton-nest.remap",    
+    "onCommand:extension.inkton-nest.reset",    
     "onCommand:extension.inkton-nest.build",
+    "onCommand:extension.inkton-nest.publish",    
     "onCommand:extension.inkton-nest.restore",    
     "onCommand:extension.inkton-nest.scaffold",
     "onCommand:extension.inkton-nest.help"    
@@ -36,13 +37,17 @@
         "title": "Nest Clean"
       },
       {
-        "command": "extension.inkton-nest.remap",
-        "title": "Nest Remap"
+        "command": "extension.inkton-nest.reset",
+        "title": "Nest Reset"
       },      
       {
         "command": "extension.inkton-nest.build",
         "title": "Nest Build"
       },
+      {
+        "command": "extension.inkton-nest.publish",
+        "title": "Nest Publish"
+      },      
       {
         "command": "extension.inkton-nest.restore",
         "title": "Nest Restore"
