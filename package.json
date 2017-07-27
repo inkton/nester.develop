@@ -11,9 +11,13 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:extension.inkton-nest.deploy",
+    "onCommand:extension.inkton-nest.dataup",
+    "onCommand:extension.inkton-nest.datadown",
+    "onCommand:extension.inkton-nest.viewdata",
+    "onCommand:extension.inkton-nest.viewqueue",    
     "onCommand:extension.inkton-nest.select",
     "onCommand:extension.inkton-nest.clean",
+    "onCommand:extension.inkton-nest.clear",    
     "onCommand:extension.inkton-nest.reset",    
     "onCommand:extension.inkton-nest.build",
     "onCommand:extension.inkton-nest.publish",    
@@ -25,8 +29,20 @@
   "contributes": {
     "commands": [
       {
-        "command": "extension.inkton-nest.deploy",
-        "title": "Nest Deploy"
+        "command": "extension.inkton-nest.dataup",
+        "title": "Nest Data Up"
+      },
+      {
+        "command": "extension.inkton-nest.datadown",
+        "title": "Nest Data Down"
+      },
+      {
+        "command": "extension.inkton-nest.viewdata",
+        "title": "Nest View Data"
+      },
+      {
+        "command": "extension.inkton-nest.viewqueue",
+        "title": "Nest View Queue"
       },
       {
         "command": "extension.inkton-nest.select",
@@ -36,6 +52,10 @@
         "command": "extension.inkton-nest.clean",
         "title": "Nest Clean"
       },
+      {
+        "command": "extension.inkton-nest.clear",
+        "title": "Nest Clear"
+      },      
       {
         "command": "extension.inkton-nest.reset",
         "title": "Nest Reset"
