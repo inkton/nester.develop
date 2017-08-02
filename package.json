@@ -20,7 +20,8 @@
     "onCommand:extension.inkton-nest.clear",    
     "onCommand:extension.inkton-nest.reset",    
     "onCommand:extension.inkton-nest.build",
-    "onCommand:extension.inkton-nest.publish",    
+    "onCommand:extension.inkton-nest.push",
+    "onCommand:extension.inkton-nest.pull",
     "onCommand:extension.inkton-nest.restore",    
     "onCommand:extension.inkton-nest.scaffold",
     "onCommand:extension.inkton-nest.help"    
@@ -65,8 +66,12 @@
         "title": "Nest Build"
       },
       {
-        "command": "extension.inkton-nest.publish",
-        "title": "Nest Publish"
+        "command": "extension.inkton-nest.push",
+        "title": "Nest Push"
+      },
+      {
+        "command": "extension.inkton-nest.pull",
+        "title": "Nest Pull"
       },      
       {
         "command": "extension.inkton-nest.restore",
