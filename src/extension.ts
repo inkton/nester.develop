@@ -347,10 +347,9 @@ IdentityFile ${rootFolder}/.contact_key`, 'utf-8', function(error) {
                     
                     progressStep("Project ssh config created.", statusBarItem);        
 
-                    var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && 
-                     git config --local core.fileMode false`.replace(/\\/g,"/");
+                    var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && git config --local core.fileMode false`.replace(/\\/g,"/");
                     
-                    exec(gitInit, { 'cwd' : nestHost}, 
+                    exec(gitInit, { 'cwd' : nestHost.replace(/\\/g,"/")}, 
                         (error, stdout, stderr) => {
 
                         console.log(stdout);
@@ -734,42 +733,76 @@ function clean() : any {
 /**
  * up the reset
  */
-function reset() : any {
+function reset() : any 
+{
     const nestProject = getNestProject();
     if (nestProject === null)
         return false;
 
+    var nestSettings = getNestSettings(statusBarItem);
+    if (!nestSettings || nestSettings['names'].length === 0)
+    {
+        progressStepFail('No nest projects found', statusBarItem);
+        return;
+    }
+    
     let deferred = Q.defer();
     var statusBarItem = progressStart("Restting ...");
     const rootFolder = getRootFolder();
 
-    exec('docker-compose up -d', { 'cwd' : rootFolder }, 
+    exec('docker-machine ip', 
         (error, stdout, stderr) => {
 
-        console.log(stdout);
-        console.log(stderr);
-        
         if (error !== null) {
             progressStepFail(stderr, statusBarItem);
-            deferred.reject(nestProject);                
+            deferred.reject();                
             return;
         }
 
-        progressStep("Downloading the source ...", statusBarItem);
+        var dockerMachineIP = stdout.trim();
+        var services = [];
 
-        createNestProject(nestProject, statusBarItem)
-            .then(function (value) {
-                progressStep('-------------------------------------', statusBarItem);
-                progressStep('        The project reset ended      ', statusBarItem);
-                progressStep('-------------------------------------', statusBarItem);
-                progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-                progressEnd(statusBarItem);
-                deferred.resolve(nestProject);            
-            })
-            .catch(function (error) {
-                deferred.reject();            
+        Object.keys(nestSettings['byKey']).forEach(function(key, index) {
+            if (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
+            {
+                progressStep("Discovering services ...", statusBarItem);                
+                services.push(scaffoldService(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder).promise);                        
+            }                    
+        });
+
+        Q.all(services).done(function (values) {
+            progressStep("Setting shared services.", statusBarItem);            
+            setNestSettings(statusBarItem, nestSettings);
+
+            exec('docker-compose up -d', { 'cwd' : rootFolder }, 
+                (error, stdout, stderr) => {
+
+                console.log(stdout);
+                console.log(stderr);
+                
+                if (error !== null) {
+                    progressStepFail(stderr, statusBarItem);
+                    deferred.reject(nestProject);                
+                    return;
+                }
+
+                progressStep("Downloading the source ...", statusBarItem);
+
+                createNestProject(nestProject, statusBarItem)
+                    .then(function (value) {
+                        progressStep('-------------------------------------', statusBarItem);
+                        progressStep('        The project reset ended      ', statusBarItem);
+                        progressStep('-------------------------------------', statusBarItem);
+                        progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
+                        progressEnd(statusBarItem);
+                        deferred.resolve(nestProject);            
+                    })
+                    .catch(function (error) {
+                        deferred.reject();
+                    });   
             });   
-    });   
+        });
+    });
 
    return deferred.promise;
 }
@@ -1058,12 +1091,11 @@ function scaffold() : any {
                         services.push(scaffoldService(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder).promise);                        
                     }                    
                 });
-                
+
                 Q.all(services).done(function (values) {
                     progressStep("Setting shared area upstream.", statusBarItem);
 
-                    var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && 
-                     git config --local core.fileMode false`.replace(/\\/g,"/");                    
+                    var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && git config --local core.fileMode false`.replace(/\\/g,"/");
                     var sharedFolder = rootFolder + "/source/shared";
 
                     exec(gitInit, { 'cwd' : sharedFolder}, 
