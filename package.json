@@ -1,14 +1,17 @@
 {
-  "name": "inkton-nest",
-  "displayName": "inkton.nest",
-  "description": "to manage nest local work",
+  "name": "nester-develop",
+  "displayName": "Nester Develop",
+  "description": "Develop your nest.yt app on the desktop",
   "version": "0.0.1",
   "publisher": "Inkton",
+  "icon": "images/nester-develop.png",
   "engines": {
     "vscode": "^1.12.0"
   },
   "categories": [
-    "Other"
+    "Docker",
+    "Dotnet",
+    "Dotnet Core"    
   ],
   "activationEvents": [
     "onCommand:extension.inkton-nest.dataup",
@@ -99,10 +102,10 @@
     "mocha": "^2.3.3",
     "@types/node": "^6.0.40",
     "@types/mocha": "^2.2.32",
-    "path-exists": "3.0.0",
     "yamljs": "0.2.10",
     "xml2js": "0.4.17",
     "q": "1.5.0",
-    "child-process-promise":"2.2.1"
+    "child-process-promise":"2.2.1",
+    "glob-fs":"0.1.7"
   }
 }

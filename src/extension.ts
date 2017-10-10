@@ -10,8 +10,9 @@ var exec = require('child_process').exec;
 var yaml = require('yamljs');
 var fs = require("fs");
 var xml2js = require('xml2js');
-var pathExists = require('path-exists');
+var glob = require('glob-fs')({ gitignore: true });
 var Q = require('q');
+var process = require('process');
 
 function showError(message, exception = null) : void {
     var errorMessage = message;
@@ -50,18 +51,31 @@ function progressEnd(statusBarItem) : void {
 }
 
 /**
- * get root folder  
+ * get file set
  */
+function fileSet(cwd, path) : any {
+    try
+    {
+        process.chdir(cwd);
+        return glob.readdirSync(path);    
+    } catch (e) {
+        return [];
+    }
+}
+
 function getRootFolder() : string {
     const workspace = vscode.workspace;
 
     if (workspace && workspace.rootPath !== null)
-    {        
-        if (pathExists.sync(workspace.rootPath + '/docker-compose.yml'))
+    {       
+        var isDevkit = fileSet(workspace.rootPath, '*.devkit');
+        var isNestJson = fileSet(workspace.rootPath, 'nest.json'); 
+        
+        if (isDevkit.length > 0)
         {
             return workspace.rootPath;
         }
-        else if (pathExists.sync(workspace.rootPath + '/nest.json'))
+        else if (isNestJson.length > 0)
         {
             var nest = JSON.parse(fs.readFileSync(workspace.rootPath + '/nest.json'));
             return nest.environment['NEST_FOLDER_ROOT'];
@@ -79,7 +93,7 @@ function getNestProject() : any {
     const workspace = vscode.workspace;
     if (workspace && workspace.rootPath !== null)
     {        
-        if (pathExists.sync(workspace.rootPath + '/nest.json'))
+        if (fs.readdirSync(workspace.rootPath + '/nest.json').length !== 0)
         {
             return JSON.parse(fs.readFileSync(workspace.rootPath + '/nest.json'));
         } 
@@ -117,12 +131,15 @@ function getNestSettings(statusBarItem) : any {
 
     if (rootFolder !== null)
     {       
-        if (pathExists.sync(rootFolder + '/settings.json'))
+        var isSettingsJson = fileSet(rootFolder, 'settings.json'); 
+        var isDevkit = fileSet(rootFolder, '*.devkit'); 
+        
+        if (isSettingsJson.length > 0)
         {
             var settings = JSON.parse(fs.readFileSync(rootFolder + '/settings.json'));
             return settings;
         }
-        else if (pathExists.sync(rootFolder + '/docker-compose.yml'))
+        else if (isDevkit.length > 0)
         {
             progressStep("Found services ... ", statusBarItem);
     
@@ -135,7 +152,7 @@ function getNestSettings(statusBarItem) : any {
             nestSettings['services'] = [];           
             nestSettings['workers'] = [];
                             
-            nest = yaml.load(rootFolder + '/docker-compose.yml');
+            nest = yaml.load(rootFolder + '/' + isDevkit[0]);
             Object.keys(nest.services).forEach(function(key, index) {
                 switch (nest.services[key].environment['NEST_PLATFORM_TAG'])
                 {
@@ -774,7 +791,7 @@ function reset() : any
             progressStep("Setting shared services.", statusBarItem);            
             setNestSettings(statusBarItem, nestSettings);
 
-            exec('docker-compose up -d', { 'cwd' : rootFolder }, 
+            exec('docker-compose --file '+ nestProject.environment['NEST_APP_TAG'] +'.devkit up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
 
                 console.log(stdout);
@@ -1062,12 +1079,32 @@ function scaffold() : any {
         progressStep("The docker images will be downloaded and built", statusBarItem);        
         progressStep("This may take a while, please wait ...", statusBarItem);
 
-        exec('docker-compose down', { 'cwd' : rootFolder }, 
+        var theDevkit = fileSet(rootFolder, '*.devkit'); 
+
+        exec('docker-compose --file '+ theDevkit[0] +' down', { 'cwd' : rootFolder }, 
             (error, stdout, stderr) => {
             
-            exec('docker-compose up -d', { 'cwd' : rootFolder }, 
+            console.log(stdout);
+            console.log(stderr);
+                
+            if (error !== null) {
+                progressStepFail(stderr, statusBarItem);
+                deferred.reject();                
+                return;
+            }
+
+            exec('docker-compose --file '+ theDevkit[0] +' up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
 
+                console.log(stdout);
+                console.log(stderr);
+                        
+                if (error !== null) {
+                    progressStepFail(stderr, statusBarItem);
+                    deferred.reject();                
+                    return;
+                }
+                            
                 console.log(stdout);
                 console.log(stderr);
                 
