@@ -63,19 +63,47 @@ function fileSet(cwd, path) : any {
     }
 }
 
+function isNestProject(folder) : Boolean {
+    try
+    {
+        return fs.existsSync(folder + '/nest.json');
+    } catch (e) {
+        return false;
+    }
+}
+
+function hasScaffold(folder) : Boolean {
+    try
+    {
+        return fs.existsSync(folder + '/settings.json');
+    } catch (e) {
+        return false;
+    }
+}
+
+function devkit(folder) : string {
+    try
+    {
+        var files = fileSet(folder, '*.devkit'); 
+        if (files.length !== 0)
+        {
+            return files[0];
+        }        
+    } catch (e) {
+    }
+    return null;
+}
+
 function getRootFolder() : string {
     const workspace = vscode.workspace;
 
     if (workspace && workspace.rootPath !== null)
     {       
-        var isDevkit = fileSet(workspace.rootPath, '*.devkit');
-        var isNestJson = fileSet(workspace.rootPath, 'nest.json'); 
-        
-        if (isDevkit.length > 0)
+        if (devkit(workspace.rootPath) !== null)
         {
             return workspace.rootPath;
         }
-        else if (isNestJson.length > 0)
+        else if (isNestProject(workspace.rootPath))
         {
             var nest = JSON.parse(fs.readFileSync(workspace.rootPath + '/nest.json'));
             return nest.environment['NEST_FOLDER_ROOT'];
@@ -93,7 +121,7 @@ function getNestProject() : any {
     const workspace = vscode.workspace;
     if (workspace && workspace.rootPath !== null)
     {        
-        if (fs.readdirSync(workspace.rootPath + '/nest.json').length !== 0)
+        if (isNestProject(workspace.rootPath))
         {
             return JSON.parse(fs.readFileSync(workspace.rootPath + '/nest.json'));
         } 
@@ -130,16 +158,13 @@ function getNestSettings(statusBarItem) : any {
     const rootFolder = getRootFolder();
 
     if (rootFolder !== null)
-    {       
-        var isSettingsJson = fileSet(rootFolder, 'settings.json'); 
-        var isDevkit = fileSet(rootFolder, '*.devkit'); 
-        
-        if (isSettingsJson.length > 0)
+    {  
+        if (hasScaffold(rootFolder))
         {
             var settings = JSON.parse(fs.readFileSync(rootFolder + '/settings.json'));
             return settings;
         }
-        else if (isDevkit.length > 0)
+        else if (devkit(rootFolder) !== null)
         {
             progressStep("Found services ... ", statusBarItem);
     
@@ -152,7 +177,7 @@ function getNestSettings(statusBarItem) : any {
             nestSettings['services'] = [];           
             nestSettings['workers'] = [];
                             
-            nest = yaml.load(rootFolder + '/' + isDevkit[0]);
+            nest = yaml.load(rootFolder + '/' + devkit(rootFolder));
             Object.keys(nest.services).forEach(function(key, index) {
                 switch (nest.services[key].environment['NEST_PLATFORM_TAG'])
                 {
@@ -1079,9 +1104,9 @@ function scaffold() : any {
         progressStep("The docker images will be downloaded and built", statusBarItem);        
         progressStep("This may take a while, please wait ...", statusBarItem);
 
-        var theDevkit = fileSet(rootFolder, '*.devkit'); 
+        var theDevkit = devkit(rootFolder); 
 
-        exec('docker-compose --file '+ theDevkit[0] +' down', { 'cwd' : rootFolder }, 
+        exec('docker-compose --file '+ theDevkit +' down', { 'cwd' : rootFolder }, 
             (error, stdout, stderr) => {
             
             console.log(stdout);
@@ -1093,7 +1118,7 @@ function scaffold() : any {
                 return;
             }
 
-            exec('docker-compose --file '+ theDevkit[0] +' up -d', { 'cwd' : rootFolder }, 
+            exec('docker-compose --file '+ theDevkit +' up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
 
                 console.log(stdout);

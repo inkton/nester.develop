@@ -1,17 +1,16 @@
 {
   "name": "nester-develop",
   "displayName": "Nester Develop",
-  "description": "Develop your nest.yt app on the desktop",
+  "description": "Develop your dotenet core nest.yt app on the desktop",
   "version": "0.0.1",
-  "publisher": "Inkton",
-  "icon": "images/nester-develop.png",
+  "publisher": "inkton",
+  "icon": "images/inkton.png",
   "engines": {
     "vscode": "^1.12.0"
   },
   "categories": [
-    "Docker",
-    "Dotnet",
-    "Dotnet Core"    
+    "Debuggers",
+    "Other"    
   ],
   "activationEvents": [
     "onCommand:extension.inkton-nest.dataup",
