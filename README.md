@@ -1,7 +1,8 @@
 # Nester Develop
 
+The app develop client for the nest.yt service.
 
-![Git Bash](images/nester-develop.png)
+![Nest Developer](https://github.com/inkton/nester.develop/wiki/images/nv-title.png)
 
 This is the README for your extension "inkton-nest". After writing up a brief description, we recommend including the following sections.
 
