@@ -1,7 +1,6 @@
 # Nester Develop
 
-The app develop client for the nest.yt service.
-
+The Visual Studio Code tools and libraries to develop dotnet core applications deployed on the nest.yt PaaS.
 ![Nest Developer](https://github.com/inkton/nester.develop/wiki/images/nv-title.png)
 
 ### The Wiki
