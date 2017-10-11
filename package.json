@@ -1,110 +1,120 @@
 {
   "name": "nester-develop",
   "displayName": "Nester Develop",
-  "description": "Develop your dotenet core nest.yt app on the desktop",
-  "version": "0.0.1",
+  "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
+  "version": "0.2.1",
+  "author": "Inkton",
   "publisher": "inkton",
-  "icon": "images/inkton.png",
+  "icon": "images/nester-develop.png",
   "engines": {
-    "vscode": "^1.12.0"
+    "vscode": "^1.17.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inkton/nester.develop.git"
+  },  
+  "bugs": {
+    "url": "https://github.com/inkton/nester.develop/issues"
+  },  
   "categories": [
     "Debuggers",
-    "Other"    
+    "Other"
   ],
   "activationEvents": [
-    "onCommand:extension.inkton-nest.dataup",
-    "onCommand:extension.inkton-nest.datadown",
-    "onCommand:extension.inkton-nest.viewdata",
-    "onCommand:extension.inkton-nest.viewqueue",    
-    "onCommand:extension.inkton-nest.select",
-    "onCommand:extension.inkton-nest.clean",
-    "onCommand:extension.inkton-nest.clear",    
-    "onCommand:extension.inkton-nest.reset",    
-    "onCommand:extension.inkton-nest.build",
-    "onCommand:extension.inkton-nest.push",
-    "onCommand:extension.inkton-nest.pull",
-    "onCommand:extension.inkton-nest.restore",    
-    "onCommand:extension.inkton-nest.scaffold",
-    "onCommand:extension.inkton-nest.help"    
+    "onCommand:extension.dataup",
+    "onCommand:extension.datadown",
+    "onCommand:extension.viewdata",
+    "onCommand:extension.viewqueue",
+    "onCommand:extension.select",
+    "onCommand:extension.clean",
+    "onCommand:extension.clear",
+    "onCommand:extension.reset",
+    "onCommand:extension.build",
+    "onCommand:extension.push",
+    "onCommand:extension.pull",
+    "onCommand:extension.restore",
+    "onCommand:extension.scaffold",
+    "onCommand:extension.help"
   ],
-  "main": "./out/src/extension",
+  "main": "./out/extension",
   "contributes": {
     "commands": [
       {
-        "command": "extension.inkton-nest.dataup",
+        "command": "extension.dataup",
         "title": "Nest Data Up"
       },
       {
-        "command": "extension.inkton-nest.datadown",
+        "command": "extension.datadown",
         "title": "Nest Data Down"
       },
       {
-        "command": "extension.inkton-nest.viewdata",
+        "command": "extension.viewdata",
         "title": "Nest View Data"
       },
       {
-        "command": "extension.inkton-nest.viewqueue",
+        "command": "extension.viewqueue",
         "title": "Nest View Queue"
       },
       {
-        "command": "extension.inkton-nest.select",
+        "command": "extension.select",
         "title": "Nest Select"
       },
       {
-        "command": "extension.inkton-nest.clean",
+        "command": "extension.clean",
         "title": "Nest Clean"
       },
       {
-        "command": "extension.inkton-nest.clear",
+        "command": "extension.clear",
         "title": "Nest Clear"
-      },      
+      },
       {
-        "command": "extension.inkton-nest.reset",
+        "command": "extension.reset",
         "title": "Nest Reset"
-      },      
+      },
       {
-        "command": "extension.inkton-nest.build",
+        "command": "extension.build",
         "title": "Nest Build"
       },
       {
-        "command": "extension.inkton-nest.push",
+        "command": "extension.push",
         "title": "Nest Push"
       },
       {
-        "command": "extension.inkton-nest.pull",
+        "command": "extension.pull",
         "title": "Nest Pull"
-      },      
+      },
       {
-        "command": "extension.inkton-nest.restore",
+        "command": "extension.restore",
         "title": "Nest Restore"
       },
       {
-        "command": "extension.inkton-nest.scaffold",
+        "command": "extension.scaffold",
         "title": "Nest Scaffold"
       },
       {
-        "command": "extension.inkton-nest.help",
+        "command": "extension.help",
         "title": "Nest Help"
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "tsc -p ./",
-    "compile": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
     "postinstall": "node ./node_modules/vscode/bin/install",
-    "test": "node ./node_modules/vscode/bin/test"
+    "test": "npm run compile && node ./node_modules/vscode/bin/test"
   },
   "devDependencies": {
-    "typescript": "^2.0.3",
-    "vscode": "^1.0.0",
-    "mocha": "^2.3.3",
-    "@types/node": "^6.0.40",
-    "@types/mocha": "^2.2.32",
-    "yamljs": "0.2.10",
-    "xml2js": "0.4.17",
-    "q": "1.5.0",
-    "child-process-promise":"2.2.1",
-    "glob-fs":"0.1.7"
+    "typescript": "^2.5.3",
+    "vscode": "^1.1.5",
+    "@types/node": "^7.0.43",
+    "@types/mocha": "^2.2.42"
+  },
+  "dependencies": {
+    "child-process-promise": "^2.2.1",
+    "glob-fs": "^0.1.7",
+    "q": "^1.5.0",
+    "xml2js": "^0.4.17",
+    "yamljs": "^0.2.10"
   }
 }

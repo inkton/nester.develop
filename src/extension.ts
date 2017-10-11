@@ -14,6 +14,27 @@ var glob = require('glob-fs')({ gitignore: true });
 var Q = require('q');
 var process = require('process');
 
+var notifier: {
+    subject : string,
+    statusBar : any; 
+    outputChannel : any;
+}
+
+function createNotifiers() : void {
+    var statusBarItem = window.createStatusBarItem(StatusBarAlignment.Left);
+    statusBarItem.show();
+
+    var myOutputChannel = vscode.window.createOutputChannel('nester.develop');
+    myOutputChannel.show();    
+
+    notifier = { subject : "", statusBar: statusBarItem,  outputChannel: myOutputChannel };        
+}
+
+function destroyNotifiers() : void {
+    notifier.statusBar.dispose();
+    notifier.outputChannel.dispose();            
+}
+
 function showError(message, exception = null) : void {
     var errorMessage = message;
     if (exception != null)
@@ -22,32 +43,37 @@ function showError(message, exception = null) : void {
     }
     console.error(errorMessage);
     vscode.window.showErrorMessage(errorMessage);
+    notifier.outputChannel(errorMessage);
 }
 
 function progressStart(message) : any {
-    var statusBarItem = window.createStatusBarItem(StatusBarAlignment.Left);
-    statusBarItem.show();
-    statusBarItem.text = message;
-    console.log(message);
-    return statusBarItem;
+    notifier.subject = message;    
+    var output = "Begin " + message + " -->";
+    notifier.statusBar.text = output;    
+    notifier.outputChannel.clear();
+    notifier.outputChannel.appendLine(output);    
+    console.log(output);    
+    return notifier;
 }
 
-function progressStep(message, statusBarItem) : void {
-    statusBarItem.text = message;
+function progressStep(message, progressMarker) : void {
+    var output = message + ".\n";
+    notifier.statusBar.text = output;
+    notifier.outputChannel.append(output);    
     console.log(message);
 }
 
-function progressStepFail(message, statusBarItem) : void {
-    statusBarItem.text = message;    
-    console.log(message);
-    showError('Docker exec failed', message);
-    statusBarItem.dispose();
+function progressStepFail(message, progressMarker) : void {
+    var output = "<-- " + notifier.subject + " failed \n[ " + message + " ]";    
+    progressMarker.statusBar.text = output;
+    progressMarker.outputChannel.appendLine(output);        
+    console.log(output);
 }
 
-function progressEnd(statusBarItem) : void {
-    statusBarItem.text = ".";
-    console.log(statusBarItem.text);
-    statusBarItem.dispose();    
+function progressEnd(progressMarker) : void {
+    var output = "<-- " + notifier.subject + " ended";        
+    notifier.outputChannel.appendLine(output);    
+    notifier.outputChannel.appendLine("'Nest Help' lists avaiable Nest commands");   
 }
 
 /**
@@ -133,18 +159,18 @@ function getNestProject() : any {
 /**
  * get nest settings
  */
-function setNestSettings(statusBarItem, nestSettings) : any {
+function setNestSettings(progressMarker, nestSettings) : any {
     const rootFolder = getRootFolder();
 
     if (rootFolder !== null)
     {   
-        progressStep("Saving settings ... ", statusBarItem);
+        progressStep("Saving settings ... ", progressMarker);
         
         fs.writeFile(rootFolder + '/settings.json', 
             JSON.stringify(nestSettings, null, 2), 'utf-8', function(error) {
 
             if (error !== null) {
-                progressStepFail('settings.json save failed', statusBarItem);
+                progressStepFail('settings.json save failed', progressMarker);
                 return;
             }
         });
@@ -154,7 +180,7 @@ function setNestSettings(statusBarItem, nestSettings) : any {
 /**
  * get nest settings
  */
-function getNestSettings(statusBarItem) : any {
+function getNestSettings(progressMarker) : any {
     const rootFolder = getRootFolder();
 
     if (rootFolder !== null)
@@ -166,7 +192,7 @@ function getNestSettings(statusBarItem) : any {
         }
         else if (devkit(rootFolder) !== null)
         {
-            progressStep("Found services ... ", statusBarItem);
+            progressStep("Found services ... ", progressMarker);
     
             var nest = null;
             var nestSettings = {};
@@ -187,14 +213,14 @@ function getNestSettings(statusBarItem) : any {
                         nestSettings['app'] = nest.services[key];         
                         nestSettings['byKey'][key] = nest.services[key];
                         nestSettings['byKey'][key].environment['NEST_FOLDER_ROOT'] = rootFolder;
-                        progressStep("Found a handler component " + key, statusBarItem);                            
+                        progressStep("Found a handler component " + key, progressMarker);                            
                         break;
                     case 'worker':
                         nestSettings['names'].push(key);
                         nestSettings['workers'].push(nest.services[key]);                                
                         nestSettings['byKey'][key] = nest.services[key];
                         nestSettings['byKey'][key].environment['NEST_FOLDER_ROOT'] = rootFolder;
-                        progressStep("Found a worker component " + key, statusBarItem);                                                                    
+                        progressStep("Found a worker component " + key, progressMarker);                                                                    
                         break;
                 }
 
@@ -206,7 +232,7 @@ function getNestSettings(statusBarItem) : any {
                         nestSettings['services'] = nest.services[key];         
                         nestSettings['byKey'][key] = nest.services[key];
                         nestSettings['byKey'][key].environment['NEST_FOLDER_ROOT'] = rootFolder;
-                        progressStep("Found a service component " + key, statusBarItem);                            
+                        progressStep("Found a service component " + key, progressMarker);                            
                         break;
                 }                
             });
@@ -215,12 +241,12 @@ function getNestSettings(statusBarItem) : any {
         }
         else    
         {
-            progressStepFail('Failed to find a Nest docker-compose file', statusBarItem);
+            progressStepFail('Failed to find a Nest docker-compose file', progressMarker);
         }
     }
     else
     {
-        progressStepFail('Failed to find a Nest docker-compose file', statusBarItem);        
+        progressStepFail('Failed to find a Nest docker-compose file', progressMarker);        
     }
 
     return null;
@@ -230,7 +256,7 @@ function getNestSettings(statusBarItem) : any {
  * run nester command
  */
 
-function runCommand(nestProject, command, statusBarItem) : any {    
+function runCommand(nestProject, command, progressMarker) : any {    
     let deferred = Q.defer();
 
     const nestTag = nestProject.environment['NEST_TAG'];
@@ -238,22 +264,23 @@ function runCommand(nestProject, command, statusBarItem) : any {
     const nestFolder = '/source/' + nestTagCap;    
     const rootFolder = nestProject.environment['NEST_FOLDER_ROOT'];
 
-    progressStep("Working with " + nestProject.container_name + " ...", statusBarItem);
+    progressStep("Working with " + nestProject.container_name + " ...", progressMarker);
 
     exec('docker exec ' + nestProject.container_name + ' nester -l /tmp/scaffold ' + command, 
         (error, stdout, stderr) => {
-
-        console.log(stdout);
-        console.log(stderr);      
-
+            
+        if (stdout !== null)
+        {
+            progressStep(stdout, progressMarker);            
+        }        
         if (error !== null) {
-            progressStepFail(stderr, statusBarItem);
+            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker); 
+            progressStepFail(stderr, progressMarker);
             deferred.reject(nestProject);                    
             return;
         }
 
-        progressStep(nestProject.container_name + " " + command + " OK.", statusBarItem);
-        progressEnd(statusBarItem);
+        progressStep(nestProject.container_name + " " + command + " OK", progressMarker);
         deferred.resolve(nestProject);
     });
 
@@ -263,14 +290,15 @@ function runCommand(nestProject, command, statusBarItem) : any {
 /**
  * up the project
  */
-function createNestAssets(nestProject, launchConfig, statusBarItem) : any
+function createNestAssets(nestProject, launchConfig, progressMarker) : any
 {
     let deferred = Q.defer();
 
     exec('docker port ' + nestProject.container_name + '  22', (error, stdout, stderr) => {
 
         if (error !== null) {
-            progressStepFail('Failed to get SSH port', statusBarItem);
+            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);       
+            progressStepFail(stderr, progressMarker);
             deferred.reject(nestProject);
             return;
         }
@@ -285,7 +313,7 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
 
         if (!fs.existsSync(nestHost))
         {
-            progressStepFail('Download failed.', statusBarItem);
+            progressStepFail('Download failed.', progressMarker);
             deferred.reject(nestProject);
             return;                
         }
@@ -294,22 +322,22 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
             JSON.stringify(nestProject, null, 2), 'utf-8', function(error) {
 
             if (error !== null) {
-                progressStepFail('nest.json create failed', statusBarItem);
+                progressStepFail('nest.json create failed', progressMarker);
                 deferred.reject(nestProject);
                 return;
             }
         });
 
-        progressStep("Ensured a nest project file exist, creating assets ... ", statusBarItem);
+        progressStep("Ensured a nest project file exist, creating assets ... ", progressMarker);
 
         if (!fs.existsSync(nestHost + '/.vscode'))
         {
             fs.mkdirSync(nestHost + '/.vscode');
-            progressStep("Created vscode assets folder ... ", statusBarItem);                        
+            progressStep("Created vscode assets folder ... ", progressMarker);                        
         }
         else
         {
-            progressStep("The vscode folder exists " + nestHost + '/.vscode', statusBarItem);
+            progressStep("The vscode folder exists " + nestHost + '/.vscode', progressMarker);
         }
 
         var taskConfig = {
@@ -334,10 +362,10 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
         fs.writeFile(nestHost + '/.vscode/tasks.json', 
             JSON.stringify(taskConfig, null, 2), 'utf-8', function(error) {
 
-            progressStep("Emitting " + nestHost + '/.vscode/tasks.json', statusBarItem);        
+            progressStep("Emitting " + nestHost + '/.vscode/tasks.json', progressMarker);        
 
             if (error !== null) {
-                progressStepFail('Failed to create ' + nestHost + '/.vscode/tasks.json', statusBarItem);
+                progressStepFail('Failed to create ' + nestHost + '/.vscode/tasks.json', progressMarker);
                 deferred.reject(nestProject);                
                 return;
             }
@@ -355,8 +383,8 @@ function createNestAssets(nestProject, launchConfig, statusBarItem) : any
         var parser = new xml2js.Parser();
         fs.readFile(nestHost + '/' + nestTagCap + '.csproj', function(err, data) {
             parser.parseString(data, function (error, result) {
-
-                progressStep("Emitting " + nestHost + '/.vscode/launch.json', statusBarItem);        
+                        
+                progressStep("Emitting " + nestHost + '/.vscode/launch.json', progressMarker);        
                                 
                 launchConfig['configurations'][0]['program'] +=  '/bin/Debug/' + 
                     result.Project.PropertyGroup[0].TargetFramework[0] + '/' + nestTagCap + '.dll';                
@@ -382,33 +410,35 @@ User ${contactId}
 UserKnownHostsFile ${rootFolder}/.tree_key
 IdentityFile ${rootFolder}/.contact_key`, 'utf-8', function(error) {
                     if (error !== null) {
-                        progressStepFail('Failed to create ' + rootFolder + '/.ssh_config', statusBarItem);
+                        progressStepFail('Failed to create ' + rootFolder + '/.ssh_config', progressMarker);
                         deferred.reject(nestProject);                
                         return;
                     }
                     
-                    progressStep("Project ssh config created.", statusBarItem);        
+                    progressStep("Project ssh config created.", progressMarker);        
 
                     var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && git config --local core.fileMode false`.replace(/\\/g,"/");
                     
                     exec(gitInit, { 'cwd' : nestHost.replace(/\\/g,"/")}, 
                         (error, stdout, stderr) => {
 
-                        console.log(stdout);
-                        console.log(stderr);
-
+                        if (stdout !== null)
+                        {
+                            progressStep(stdout, progressMarker);            
+                        }         
+                                        
                         if (error !== null) {
-                            progressStepFail('Failed to init git', statusBarItem);
+                            progressStepFail(stderr, progressMarker);
                             deferred.reject(nestProject);
                             return;
                         }
 
-                        progressStep(`Project ${nestTagCap} tracks remote branch ${nestTag}-master`, statusBarItem);
+                        progressStep(`Project ${nestTagCap} tracks remote branch ${nestTag}-master`, progressMarker);
 
                         fs.writeFile(nestHost + '/.vscode/launch.json', 
                             JSON.stringify(launchConfig, null, 2), 'utf-8', function(error) {
                             if (error !== null) {
-                                progressStepFail('Failed to create ' + nestHost + '/.vscode/launch.json', statusBarItem);
+                                progressStepFail('Failed to create ' + nestHost + '/.vscode/launch.json', progressMarker);
                                 deferred.reject(nestProject);                
                                 return;
                             }
@@ -427,9 +457,9 @@ IdentityFile ${rootFolder}/.contact_key`, 'utf-8', function(error) {
 /**
  * up the project
  */
-function createNestProject(nestProject, statusBarItem) : any
+function createNestProject(nestProject, progressMarker) : any
 {
-    progressStep("Attaching " + nestProject.container_name + " ...", statusBarItem);
+    progressStep("Attaching " + nestProject.container_name + " ...", progressMarker);
     var launchConfig = null;
     let deferred = Q.defer();
 
@@ -478,7 +508,7 @@ function createNestProject(nestProject, statusBarItem) : any
             }
         });
 
-        createNestAssets(nestProject, launchConfig, statusBarItem)
+        createNestAssets(nestProject, launchConfig, progressMarker)
             .then(function (result) {
                 deferred.resolve(nestProject);
             })
@@ -492,7 +522,8 @@ function createNestProject(nestProject, statusBarItem) : any
         exec('docker port ' + nestProject.container_name + '  5000', (error, stdout, stderr) => {
 
             if (error !== null) {
-                progressStepFail('Failed to get the HTTP port', statusBarItem);
+                progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                
+                progressStepFail(stderr, progressMarker);
                 deferred.reject(nestProject);
                 return;
             }
@@ -569,7 +600,7 @@ function createNestProject(nestProject, statusBarItem) : any
                 }
             });
 
-            createNestAssets(nestProject, launchConfig, statusBarItem)
+            createNestAssets(nestProject, launchConfig, progressMarker)
                 .then(function (result) {
                     deferred.resolve(nestProject);
                 })
@@ -592,20 +623,18 @@ function dataDown() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Data downloading ...");
+    var progressMarker = progressStart("data download");
 
-    runCommand(nestProject, "data pull", statusBarItem)
+    runCommand(nestProject, "data pull", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('     The data has been downloaded    ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);                                                                                     
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);
         })
         .catch(function (error) {
-            deferred.reject();            
-        });    
+            deferred.reject();
+            progressStepFail(error, progressMarker); 
+        });
 
    return deferred.promise;
 }
@@ -619,19 +648,17 @@ function dataUp() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Data uploading ...");
+    var progressMarker = progressStart("data upload");
 
-    runCommand(nestProject, "data push", statusBarItem)
+    runCommand(nestProject, "data push", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('      The data has been uploaded     ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);                                                                                     
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);            
         })
         .catch(function (error) {
-            deferred.reject();            
+            deferred.reject();
+            progressStepFail(error, progressMarker);            
         });    
 
    return deferred.promise;
@@ -642,11 +669,11 @@ function dataUp() : any {
  */
 function viewData() : any {
 
-    var statusBarItem = progressStart("Opening browser ...");    
-    var nestSettings = getNestSettings(statusBarItem);
+    var progressMarker = progressStart("view data");    
+    var nestSettings = getNestSettings(progressMarker);
     if (!nestSettings || nestSettings['names'].length === 0)
     {
-        progressStepFail('No nest projects found', statusBarItem);
+        progressStepFail('No nest projects found', progressMarker);
         return;
     }
 
@@ -654,7 +681,9 @@ function viewData() : any {
             nestSettings['byKey']['db-mariadb'].environment['NEST_DOCKER_MACHINE_IP'] + ':' +
             nestSettings['byKey']['db-mariadb'].environment['NEST_SERVICE_VIEW_PORT']
 
-    vscode.commands.executeCommand('vscode.open', vscode.Uri.parse(url))
+    vscode.commands.executeCommand('vscode.open', vscode.Uri.parse(url));
+
+    progressEnd(progressMarker);
 }
 
 /**
@@ -662,11 +691,11 @@ function viewData() : any {
  */
 function viewQueue() : any {
 
-    var statusBarItem = progressStart("Opening browser ...");    
-    var nestSettings = getNestSettings(statusBarItem);
+    var progressMarker = progressStart("view queue");    
+    var nestSettings = getNestSettings(progressMarker);
     if (!nestSettings || nestSettings['names'].length === 0)
     {
-        progressStepFail('No nest projects found', statusBarItem);
+        progressStepFail('No nest projects found', progressMarker);
         return;
     }
 
@@ -674,7 +703,9 @@ function viewQueue() : any {
             nestSettings['byKey']['queue-rabbitmq'].environment['NEST_DOCKER_MACHINE_IP'] + ':' +
             nestSettings['byKey']['queue-rabbitmq'].environment['NEST_SERVICE_VIEW_PORT']
 
-    vscode.commands.executeCommand('vscode.open', vscode.Uri.parse(url))
+    vscode.commands.executeCommand('vscode.open', vscode.Uri.parse(url));
+
+    progressEnd(progressMarker);
 }
 
 /**
@@ -682,11 +713,11 @@ function viewQueue() : any {
  */
 function select() : any {
 
-    var statusBarItem = progressStart("Selecting ...");    
-    var nestSettings = getNestSettings(statusBarItem);
+    var progressMarker = progressStart("select project");    
+    var nestSettings = getNestSettings(progressMarker);
     if (!nestSettings || nestSettings['names'].length === 0)
     {
-        progressStepFail('No nest projects found', statusBarItem);
+        progressStepFail('No nest projects found', progressMarker);
         return;
     }
 
@@ -714,7 +745,7 @@ function select() : any {
                     vscode.window.showErrorMessage('The source code does not exist. Ensure to scaffold first.');
                 }
             }
-            progressEnd(statusBarItem);
+            progressEnd(progressMarker);
         });
 }
 
@@ -727,19 +758,16 @@ function clear() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Clearing ...");
+    var progressMarker = progressStart("clear");
 
-    runCommand(nestProject, "deployment clear", statusBarItem)
+    runCommand(nestProject, "deployment clear", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('         The project is clear       ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);                                                                                     
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);                                                                           
         })
         .catch(function (error) {
-            deferred.reject();            
+            deferred.reject();
+            progressStepFail(error, progressMarker); 
         });    
 
    return deferred.promise;
@@ -754,19 +782,16 @@ function clean() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Cleaning ...");
+    var progressMarker = progressStart("cleaning");
 
-    runCommand(nestProject, "deployment clean", statusBarItem)
+    runCommand(nestProject, "deployment clean", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('         The project is clean       ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);                                                                                     
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);            
         })
         .catch(function (error) {
-            deferred.reject();            
+            deferred.reject();  
+            progressStepFail(error, progressMarker);          
         });    
 
    return deferred.promise;
@@ -781,22 +806,23 @@ function reset() : any
     if (nestProject === null)
         return false;
 
-    var nestSettings = getNestSettings(statusBarItem);
+    var nestSettings = getNestSettings(progressMarker);
     if (!nestSettings || nestSettings['names'].length === 0)
     {
-        progressStepFail('No nest projects found', statusBarItem);
+        progressStepFail('No nest projects found', progressMarker);
         return;
     }
     
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Restting ...");
+    var progressMarker = progressStart("reset");
     const rootFolder = getRootFolder();
 
     exec('docker-machine ip', 
         (error, stdout, stderr) => {
 
         if (error !== null) {
-            progressStepFail(stderr, statusBarItem);
+            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);             
+            progressStepFail(stderr, progressMarker);
             deferred.reject();                
             return;
         }
@@ -807,36 +833,35 @@ function reset() : any
         Object.keys(nestSettings['byKey']).forEach(function(key, index) {
             if (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
             {
-                progressStep("Discovering services ...", statusBarItem);                
-                services.push(scaffoldService(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder).promise);                        
+                progressStep("Discovering services ...", progressMarker);                
+                services.push(scaffoldService(nestSettings, key, dockerMachineIP, progressMarker, rootFolder).promise);                        
             }                    
         });
 
         Q.all(services).done(function (values) {
-            progressStep("Setting shared services.", statusBarItem);            
-            setNestSettings(statusBarItem, nestSettings);
+            progressStep("Setting shared services.", progressMarker);            
+            setNestSettings(progressMarker, nestSettings);
 
             exec('docker-compose --file '+ nestProject.environment['NEST_APP_TAG'] +'.devkit up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
 
-                console.log(stdout);
-                console.log(stderr);
-                
+                if (stdout !== null)
+                {
+                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                           
+                    progressStep(stdout, progressMarker);            
+                }
+
                 if (error !== null) {
-                    progressStepFail(stderr, statusBarItem);
+                    progressStepFail(stderr, progressMarker);
                     deferred.reject(nestProject);                
                     return;
                 }
 
-                progressStep("Downloading the source ...", statusBarItem);
+                progressStep("Downloading the source ...", progressMarker);
 
-                createNestProject(nestProject, statusBarItem)
+                createNestProject(nestProject, progressMarker)
                     .then(function (value) {
-                        progressStep('-------------------------------------', statusBarItem);
-                        progressStep('        The project reset ended      ', statusBarItem);
-                        progressStep('-------------------------------------', statusBarItem);
-                        progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-                        progressEnd(statusBarItem);
+                        progressEnd(progressMarker);
                         deferred.resolve(nestProject);            
                     })
                     .catch(function (error) {
@@ -858,19 +883,16 @@ function restore() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Restoring ...");
+    var progressMarker = progressStart("restore");
 
-    runCommand(nestProject, "deployment restore", statusBarItem)
+    runCommand(nestProject, "deployment restore", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('       The project restore ended    ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);                                                                                     
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);            
         })
         .catch(function (error) {
-            deferred.reject();            
+            deferred.reject();
+            progressStepFail(error, progressMarker);        
         });    
 
    return deferred.promise;
@@ -885,19 +907,16 @@ function build() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Building ...");
+    var progressMarker = progressStart("building");
 
-    runCommand(nestProject, "deployment build", statusBarItem)
+    runCommand(nestProject, "deployment build", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('       The project build ended    ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);            
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);            
         })
         .catch(function (error) {
-            deferred.reject();                            
+            deferred.reject();
+            progressEnd(progressMarker);            
         });
 
    return deferred.promise;        
@@ -912,19 +931,16 @@ function pull() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Pulling from production ...");
+    var progressMarker = progressStart("pull content");
 
-    runCommand(nestProject, "deployment pull", statusBarItem)
+    runCommand(nestProject, "deployment pull", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('         The project pull ended      ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);            
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);            
         })
         .catch(function (error) {
-            deferred.reject();                            
+            deferred.reject(); 
+            progressEnd(progressMarker);            
         });
 
    return deferred.promise;        
@@ -940,19 +956,16 @@ function push() : any {
         return false;
 
     let deferred = Q.defer();
-    var statusBarItem = progressStart("Publishing ...");
+    var progressMarker = progressStart("publish");
 
-    runCommand(nestProject, "deployment push", statusBarItem)
+    runCommand(nestProject, "deployment push", progressMarker)
         .then(function (value) {
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('       The project push ended        ', statusBarItem);
-            progressStep('-------------------------------------', statusBarItem);
-            progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-            progressEnd(statusBarItem);
-            deferred.resolve(nestProject);            
+            deferred.resolve(nestProject);
+            progressEnd(progressMarker);           
         })
         .catch(function (error) {
-            deferred.reject();                            
+            deferred.reject();
+            progressEnd(progressMarker);           
         });
 
    return deferred.promise;        
@@ -961,50 +974,50 @@ function push() : any {
 /**
  * up the scaffold nesst
  */
-function scaffoldNest(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder) : any 
+function scaffoldNest(nestSettings, key, dockerMachineIP, progressMarker, rootFolder) : any 
 {
     let deferred = Q.defer();
 
     nestSettings['byKey'][key].environment['NEST_DOCKER_MACHINE_IP'] = dockerMachineIP;
-    progressStep("Attaching " + nestSettings['byKey'][key].container_name + ", this may take a minute or two ...", statusBarItem);
+    progressStep("Attaching " + nestSettings['byKey'][key].container_name + ", this may take a minute or two ...", progressMarker);
 
-    runCommand(nestSettings['byKey'][key], "app attach", statusBarItem)
+    runCommand(nestSettings['byKey'][key], "app attach", progressMarker)
         .then(function (result) {
             
-            progressStep("Attach ok ... pulling from production " + nestSettings['byKey'][key].container_name, statusBarItem);
+            progressStep("Attach ok ... pulling from production " + nestSettings['byKey'][key].container_name, progressMarker);
 
-            runCommand(nestSettings['byKey'][key], "deployment pull", statusBarItem)
+            runCommand(nestSettings['byKey'][key], "deployment pull", progressMarker)
                 .then(function (value) {
 
-                progressStep("Code for " + nestSettings['byKey'][key].container_name + " deployment downloaded", statusBarItem);
+                progressStep("Code for " + nestSettings['byKey'][key].container_name + " deployment downloaded", progressMarker);
 
-                createNestProject(nestSettings['byKey'][key], statusBarItem)
+                createNestProject(nestSettings['byKey'][key], progressMarker)
                     .then(function (result) {
                     
-                    progressStep("Project " + nestSettings['byKey'][key].container_name + " created, now restoring ...", statusBarItem); 
+                    progressStep("Project " + nestSettings['byKey'][key].container_name + " created, now restoring ...", progressMarker); 
                     
-                    runCommand(nestSettings['byKey'][key], "deployment restore", statusBarItem)
+                    runCommand(nestSettings['byKey'][key], "deployment restore", progressMarker)
                         .then(function (value) {
 
-                            progressStep("Project " + nestSettings['byKey'][key].container_name + " created, now building ...", statusBarItem); 
+                            progressStep("Project " + nestSettings['byKey'][key].container_name + " created, now building ...", progressMarker); 
                             
-                            runCommand(nestSettings['byKey'][key], "deployment build", statusBarItem)
+                            runCommand(nestSettings['byKey'][key], "deployment build", progressMarker)
                                 .then(function (value) {
                                     // done!
                                     deferred.resolve(nestSettings);
                                 })
                                 .catch(function (error) {
-                                    progressStepFail(nestSettings['byKey'][key].container_name + ' project build failed', statusBarItem);
+                                    progressStepFail(nestSettings['byKey'][key].container_name + ' project build failed', progressMarker);
                                     deferred.reject(nestSettings);
                                 });
                         })
                         .catch(function (error) {
-                            progressStepFail(nestSettings['byKey'][key].container_name + ' project restore failed', statusBarItem);
+                            progressStepFail(nestSettings['byKey'][key].container_name + ' project restore failed', progressMarker);
                             deferred.reject(nestSettings);
                         });                                            
                     })
                     .catch(function (error) {
-                        progressStepFail(nestSettings['byKey'][key].container_name + ' project create failed', statusBarItem);
+                        progressStepFail(nestSettings['byKey'][key].container_name + ' project create failed', progressMarker);
                         deferred.reject(nestSettings);
                         return;
                     });                
@@ -1014,7 +1027,7 @@ function scaffoldNest(nestSettings, key, dockerMachineIP, statusBarItem, rootFol
                 });        
         })
         .catch(function (error) {
-            progressStepFail('Attach failed', statusBarItem);
+            progressStepFail('Attach failed', progressMarker);
             deferred.reject(nestSettings);
             return;
         });
@@ -1025,12 +1038,12 @@ function scaffoldNest(nestSettings, key, dockerMachineIP, statusBarItem, rootFol
 /**
  * up the scaffold nesst
  */
-function scaffoldService(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder) : any 
+function scaffoldService(nestSettings, key, dockerMachineIP, progressMarker, rootFolder) : any 
 {
     let deferred = Q.defer();
 
     nestSettings['byKey'][key].environment['NEST_DOCKER_MACHINE_IP'] = dockerMachineIP;
-    progressStep("Discovering " + nestSettings['byKey'][key].container_name + " ports, this may take a minute or two ...", statusBarItem);
+    progressStep("Discovering " + nestSettings['byKey'][key].container_name + " ports, this may take a minute or two ...", progressMarker);
     
     var viewPort = '';
     if (key === 'db-mariadb')
@@ -1044,13 +1057,19 @@ function scaffoldService(nestSettings, key, dockerMachineIP, statusBarItem, root
 
     exec('docker port ' + nestSettings['byKey'][key].container_name + viewPort, (error, stdout, stderr) => {
 
+        if (stdout !== null)
+        {
+            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                   
+            progressStep(stdout, progressMarker);            
+        }
+
         if (error !== null) {
-            progressStepFail('Failed to get view port', statusBarItem);
+            progressStepFail(stderr, progressMarker);
             deferred.reject(nestSettings);
             return;
         }
 
-        progressStep("Port found ... saving info on " + nestSettings['byKey'][key].container_name, statusBarItem);
+        progressStep("Port found ... saving info on " + nestSettings['byKey'][key].container_name, progressMarker);
         var arr = stdout.trim().split(":");
         nestSettings['byKey'][key].environment['NEST_SERVICE_VIEW_PORT'] = arr[1];
         // done!
@@ -1077,13 +1096,13 @@ function scaffold() : any {
         return;                
     }
 
-    var statusBarItem = progressStart("Scaffolding ...");
+    var progressMarker = progressStart("scaffold");
     let deferred = Q.defer();
 
-    var nestSettings = getNestSettings(statusBarItem);
+    var nestSettings = getNestSettings(progressMarker);
     if (!nestSettings || nestSettings['names'].length === 0)
     {
-        progressStepFail('No nest projects found', statusBarItem);
+        progressStepFail('No nest projects found', progressMarker);
         deferred.reject();        
         return;
     }
@@ -1092,28 +1111,32 @@ function scaffold() : any {
         (error, stdout, stderr) => {
 
         if (error !== null) {
-            progressStepFail(stderr, statusBarItem);
+            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);            
+            progressStepFail(stderr, progressMarker);
             deferred.reject();                
             return;
         }
 
         var dockerMachineIP = stdout.trim();
 
-        progressStep("Docker IP is ... " + dockerMachineIP, statusBarItem);
-        progressStep("Composing docker containers", statusBarItem);
-        progressStep("The docker images will be downloaded and built", statusBarItem);        
-        progressStep("This may take a while, please wait ...", statusBarItem);
+        progressStep("Docker IP is ... " + dockerMachineIP, progressMarker);
+        progressStep("Composing docker containers", progressMarker);
+        progressStep("The docker images will be downloaded and built", progressMarker);        
+        progressStep("This may take a while, please wait ...", progressMarker);
 
         var theDevkit = devkit(rootFolder); 
 
         exec('docker-compose --file '+ theDevkit +' down', { 'cwd' : rootFolder }, 
             (error, stdout, stderr) => {
             
-            console.log(stdout);
-            console.log(stderr);
+            if (stdout !== null)
+            {
+                progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                
+                progressStep(stdout, progressMarker);            
+            }                
                 
             if (error !== null) {
-                progressStepFail(stderr, statusBarItem);
+                progressStepFail(stderr, progressMarker);
                 deferred.reject();                
                 return;
             }
@@ -1121,41 +1144,35 @@ function scaffold() : any {
             exec('docker-compose --file '+ theDevkit +' up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
 
-                console.log(stdout);
-                console.log(stderr);
-                        
+                if (stdout !== null)
+                {
+                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                           
+                    progressStep(stdout, progressMarker);            
+                }                
+                                                    
                 if (error !== null) {
-                    progressStepFail(stderr, statusBarItem);
+                    progressStepFail(stderr, progressMarker);
                     deferred.reject();                
                     return;
                 }
-                            
-                console.log(stdout);
-                console.log(stderr);
-                
-                if (error !== null) {
-                    progressStepFail(stderr, statusBarItem);
-                    deferred.reject(nestSettings);                
-                    return;
-                }
-
+                                            
                 var services = [];
 
                 Object.keys(nestSettings['byKey']).forEach(function(key, index) {
                     if (nestSettings['byKey'][key].environment['NEST_TAG'])
                     {
-                        progressStep("Downloading the source ...", statusBarItem);
-                        services.push(scaffoldNest(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder).promise);                        
+                        progressStep("Downloading the source ...", progressMarker);
+                        services.push(scaffoldNest(nestSettings, key, dockerMachineIP, progressMarker, rootFolder).promise);                        
                     } 
                     else if (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
                     {
-                        progressStep("Discovering services ...", statusBarItem);
-                        services.push(scaffoldService(nestSettings, key, dockerMachineIP, statusBarItem, rootFolder).promise);                        
+                        progressStep("Discovering services ...", progressMarker);
+                        services.push(scaffoldService(nestSettings, key, dockerMachineIP, progressMarker, rootFolder).promise);                        
                     }                    
                 });
 
                 Q.all(services).done(function (values) {
-                    progressStep("Setting shared area upstream.", statusBarItem);
+                    progressStep("Setting shared area upstream.", progressMarker);
 
                     var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && git config --local core.fileMode false`.replace(/\\/g,"/");
                     var sharedFolder = rootFolder + "/source/shared";
@@ -1163,22 +1180,20 @@ function scaffold() : any {
                     exec(gitInit, { 'cwd' : sharedFolder}, 
                         (error, stdout, stderr) => {
 
-                        console.log(stdout);
-                        console.log(stderr);
-
+                        if (stdout !== null)
+                        {
+                            progressStep(stdout, progressMarker);            
+                        } 
+                                        
                         if (error !== null) {
-                            progressStepFail('Failed to init git', statusBarItem);
+                            progressStepFail(stderr, progressMarker);
                             deferred.reject(nestSettings);
                             return;
                         }
 
-                        setNestSettings(statusBarItem, nestSettings);
+                        setNestSettings(progressMarker, nestSettings);
                         deferred.resolve(nestSettings);
-                        progressStep('-------------------------------------', statusBarItem);
-                        progressStep('      The scaffold is in place       ', statusBarItem);
-                        progressStep('-------------------------------------', statusBarItem);
-                        progressStep('Help + Nest to list avaiable Nest commands.', statusBarItem);                                                
-                        progressEnd(statusBarItem);                        
+                        progressEnd(progressMarker);                        
                     }); 
                 });
             });
@@ -1193,23 +1208,27 @@ function scaffold() : any {
  */
 function help() : any { 
 
-    console.log('-------------------------------------');
-    console.log('            Nest Commands            ');
-    console.log('-------------------------------------');
-    console.log('Nest Select, to Select a project.');    
-    console.log('Nest Data Up, to upload data to production.');
-    console.log('Nest Data Down, to download data into test.');
-    console.log('Nest View Data, to view test data.');
-    console.log('Nest View Queue, to view test queue.');         
-    console.log('Nest Restore, to restore the project.');
-    console.log('Nest Build, to build the project.');
-    console.log('Nest Clean, to clean the output.');
-    console.log('Nest Clear, to remove output folders.');
-    console.log('Nest Remap, to recapture ports.');
-    console.log('Nest Pull, to pull from production.');
-    console.log('Nest Push, to push in production.');
-    console.log('Nest Scaffold, to build assets when new or updated.');
-    console.log('Use git push to archive the code.');                                       
+    var help = `
+        -------------------------------------
+                    Nest Commands            
+        -------------------------------------
+        Nest Select, to Select a project.    
+        Nest Data Up, to upload data to production.
+        Nest Data Down, to download data into test.
+        Nest View Data, to view test data.
+        Nest View Queue, to view test queue.         
+        Nest Restore, to restore the project.
+        Nest Build, to build the project.
+        Nest Clean, to clean the output.
+        Nest Clear, to remove output folders.
+        Nest Remap, to recapture ports.
+        Nest Pull, to pull from production.
+        Nest Push, to push in production.
+        Nest Scaffold, to build assets when new or updated.
+        Use git push to archive the code.     
+    `;
+
+    notifier.outputChannel.append(help);
 }
 
 function showProgress(op) : any { 
@@ -1233,27 +1252,29 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Use the console to output diagnostic information (console.log) and errors (console.error)
     // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "inkton-nest" is now active!');
+    console.log('Congratulations, your extension "Nester Develop" is now active!');
 
     try {
+        createNotifiers();
+
         var workspace = vscode.workspace;
         var config = workspace.getConfiguration('omnisharp');
         config.update('path', 'Nope');
         
-        let dataUpDisposable = vscode.commands.registerCommand('extension.inkton-nest.dataup', () => { return showProgress(dataUp); });
-        let dataDownDisposable = vscode.commands.registerCommand('extension.inkton-nest.datadown', () => { return showProgress(dataDown); });
-        let viewdataDisposable = vscode.commands.registerCommand('extension.inkton-nest.viewdata', () => viewData());
-        let viewqueueDisposable = vscode.commands.registerCommand('extension.inkton-nest.viewqueue', () => viewQueue());              
-        let pullDisposable = vscode.commands.registerCommand('extension.inkton-nest.pull', () => { return showProgress(pull) });        
-        let pushDisposable = vscode.commands.registerCommand('extension.inkton-nest.push', () => { return showProgress(push) });
-        let selectDisposable = vscode.commands.registerCommand('extension.inkton-nest.select', () => select( ) );
-        let cleanDisposable = vscode.commands.registerCommand('extension.inkton-nest.clean', () => { return showProgress(clean) });      
-        let clearDisposable = vscode.commands.registerCommand('extension.inkton-nest.clear', () => { return showProgress(clear) });              
-        let resetDisposable = vscode.commands.registerCommand('extension.inkton-nest.reset', () => { return showProgress(reset) });
-        let buildDisposable = vscode.commands.registerCommand('extension.inkton-nest.build', () => { return showProgress(build) });
-        let helpDisposable = vscode.commands.registerCommand('extension.inkton-nest.help', () => help( ) );        
-        let restoreDisposable = vscode.commands.registerCommand('extension.inkton-nest.restore', () => { return showProgress(restore) });        
-        let scaffoldDisposable = vscode.commands.registerCommand('extension.inkton-nest.scaffold', () =>
+        let dataUpDisposable = vscode.commands.registerCommand('extension.dataup', () => { return showProgress(dataUp); });
+        let dataDownDisposable = vscode.commands.registerCommand('extension.datadown', () => { return showProgress(dataDown); });
+        let viewdataDisposable = vscode.commands.registerCommand('extension.viewdata', () => viewData());
+        let viewqueueDisposable = vscode.commands.registerCommand('extension.viewqueue', () => viewQueue());              
+        let pullDisposable = vscode.commands.registerCommand('extension.pull', () => { return showProgress(pull) });        
+        let pushDisposable = vscode.commands.registerCommand('extension.push', () => { return showProgress(push) });
+        let selectDisposable = vscode.commands.registerCommand('extension.select', () => select( ) );
+        let cleanDisposable = vscode.commands.registerCommand('extension.clean', () => { return showProgress(clean) });      
+        let clearDisposable = vscode.commands.registerCommand('extension.clear', () => { return showProgress(clear) });              
+        let resetDisposable = vscode.commands.registerCommand('extension.reset', () => { return showProgress(reset) });
+        let buildDisposable = vscode.commands.registerCommand('extension.build', () => { return showProgress(build) });
+        let helpDisposable = vscode.commands.registerCommand('extension.help', () => help( ) );        
+        let restoreDisposable = vscode.commands.registerCommand('extension.restore', () => { return showProgress(restore) });        
+        let scaffoldDisposable = vscode.commands.registerCommand('extension.scaffold', () =>
             execPromise('git --version')
                 .then(function (result) {
                     var stdout = result.stdout;
@@ -1297,5 +1318,5 @@ export function activate(context: vscode.ExtensionContext) {
 
 // this method is called when your extension is deactivated
 export function deactivate() {
-    
+    destroyNotifiers();    
 }
