@@ -513,6 +513,7 @@ function createNestProject(nestProject, progressMarker) : any
                 deferred.resolve(nestProject);
             })
             .catch(function (error) {
+                progressStepFail(error, progressMarker);
                 deferred.reject(nestProject);
                 return;
             });
@@ -605,6 +606,7 @@ function createNestProject(nestProject, progressMarker) : any
                     deferred.resolve(nestProject);
                 })
                 .catch(function (error) {
+                    progressStepFail(error, progressMarker);
                     deferred.reject(nestProject);
                     return;
                 });
@@ -625,16 +627,25 @@ function dataDown() : any {
     let deferred = Q.defer();
     var progressMarker = progressStart("data download");
 
-    runCommand(nestProject, "data pull", progressMarker)
-        .then(function (value) {
-            progressEnd(progressMarker);
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);
-        })
-        .catch(function (error) {
-            deferred.reject();
-            progressStepFail(error, progressMarker); 
-        });
+    let quickPick = ['yes', 'no'];
+    vscode.window.showQuickPick(quickPick, { placeHolder: 'Replace local Database from production?' }).then((val) => {
+        if (val) {
+            if (val === 'yes')
+            {
+                runCommand(nestProject, "data pull", progressMarker)
+                .then(function (value) {
+                    progressEnd(progressMarker);
+                    deferred.resolve(nestProject);
+                })
+                .catch(function (error) {
+                    progressStepFail(error, progressMarker); 
+                    deferred.reject();            
+                });                
+            }
+        } else {
+            return
+        }
+    })
 
    return deferred.promise;
 }
@@ -654,11 +665,10 @@ function dataUp() : any {
         .then(function (value) {
             progressEnd(progressMarker);
             deferred.resolve(nestProject);
-            progressEnd(progressMarker);            
         })
         .catch(function (error) {
-            deferred.reject();
-            progressStepFail(error, progressMarker);            
+            progressStepFail(error, progressMarker);
+            deferred.reject();           
         });    
 
    return deferred.promise;
@@ -762,12 +772,12 @@ function clear() : any {
 
     runCommand(nestProject, "deployment clear", progressMarker)
         .then(function (value) {
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);                                                                           
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);            
         })
         .catch(function (error) {
-            deferred.reject();
-            progressStepFail(error, progressMarker); 
+            progressStepFail(error, progressMarker);
+            deferred.reject();            
         });    
 
    return deferred.promise;
@@ -786,12 +796,12 @@ function clean() : any {
 
     runCommand(nestProject, "deployment clean", progressMarker)
         .then(function (value) {
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);            
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);            
         })
         .catch(function (error) {
-            deferred.reject();  
-            progressStepFail(error, progressMarker);          
+            progressStepFail(error, progressMarker);
+            deferred.reject();            
         });    
 
    return deferred.promise;
@@ -845,18 +855,18 @@ function reset() : any
             exec('docker-compose --file '+ nestProject.environment['NEST_APP_TAG'] +'.devkit up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
 
-                if (stdout !== null)
-                {
-                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                           
-                    progressStep(stdout, progressMarker);            
-                }
-
                 if (error !== null) {
+                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                                               
                     progressStepFail(stderr, progressMarker);
                     deferred.reject(nestProject);                
                     return;
                 }
 
+                if (stdout !== null)
+                {
+                    progressStep(stdout, progressMarker);            
+                }
+                
                 progressStep("Downloading the source ...", progressMarker);
 
                 createNestProject(nestProject, progressMarker)
@@ -865,6 +875,7 @@ function reset() : any
                         deferred.resolve(nestProject);            
                     })
                     .catch(function (error) {
+                        progressStepFail(error, progressMarker);
                         deferred.reject();
                     });   
             });   
@@ -887,12 +898,12 @@ function restore() : any {
 
     runCommand(nestProject, "deployment restore", progressMarker)
         .then(function (value) {
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);            
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);           
         })
         .catch(function (error) {
+            progressStepFail(error, progressMarker);
             deferred.reject();
-            progressStepFail(error, progressMarker);        
         });    
 
    return deferred.promise;
@@ -911,12 +922,12 @@ function build() : any {
 
     runCommand(nestProject, "deployment build", progressMarker)
         .then(function (value) {
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);            
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);            
         })
         .catch(function (error) {
-            deferred.reject();
-            progressEnd(progressMarker);            
+            progressStepFail(error, progressMarker);
+            deferred.reject();            
         });
 
    return deferred.promise;        
@@ -932,16 +943,36 @@ function pull() : any {
 
     let deferred = Q.defer();
     var progressMarker = progressStart("pull content");
+            
+    let quickPick = ['yes', 'no'];
+    vscode.window.showQuickPick(quickPick, { placeHolder: 'Replace local content from production?' }).then((val) => {
+        if (val) {
+            if (val === 'yes')
+            {
+                runCommand(nestProject, "deployment pull", progressMarker)
+                .then(function (value) {
 
-    runCommand(nestProject, "deployment pull", progressMarker)
-        .then(function (value) {
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);            
-        })
-        .catch(function (error) {
-            deferred.reject(); 
-            progressEnd(progressMarker);            
-        });
+                    progressStep("Re-create project ...", progressMarker);
+                    
+                    createNestProject(nestProject, progressMarker)
+                        .then(function (value) {
+                            progressEnd(progressMarker);                            
+                            deferred.resolve(nestProject);
+                        })
+                        .catch(function (error) {
+                            progressStepFail(error, progressMarker);                            
+                            deferred.reject();
+                        });   
+                })
+                .catch(function (error) {
+                    progressStepFail(error, progressMarker);                            
+                    deferred.reject();                     
+                });        
+            }
+        } else {
+            return
+        }
+    })
 
    return deferred.promise;        
 }
@@ -960,12 +991,12 @@ function push() : any {
 
     runCommand(nestProject, "deployment push", progressMarker)
         .then(function (value) {
-            deferred.resolve(nestProject);
-            progressEnd(progressMarker);           
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);            
         })
         .catch(function (error) {
-            deferred.reject();
-            progressEnd(progressMarker);           
+            progressStepFail(error, progressMarker);            
+            deferred.reject();            
         });
 
    return deferred.promise;        
@@ -1007,27 +1038,28 @@ function scaffoldNest(nestSettings, key, dockerMachineIP, progressMarker, rootFo
                                     deferred.resolve(nestSettings);
                                 })
                                 .catch(function (error) {
-                                    progressStepFail(nestSettings['byKey'][key].container_name + ' project build failed', progressMarker);
+                                    progressStepFail(nestSettings['byKey'][key].container_name + ' project build failed [' + error + ']', progressMarker);
                                     deferred.reject(nestSettings);
                                 });
                         })
                         .catch(function (error) {
-                            progressStepFail(nestSettings['byKey'][key].container_name + ' project restore failed', progressMarker);
+                            progressStepFail(nestSettings['byKey'][key].container_name + ' project restore failed [' + error + ']', progressMarker);
                             deferred.reject(nestSettings);
                         });                                            
                     })
                     .catch(function (error) {
-                        progressStepFail(nestSettings['byKey'][key].container_name + ' project create failed', progressMarker);
+                        progressStepFail(nestSettings['byKey'][key].container_name + ' project create failed [' + error + ']', progressMarker);
                         deferred.reject(nestSettings);
                         return;
                     });                
                 })
                 .catch(function (error) {
+                    progressStepFail(error, progressMarker);
                     deferred.resolve(nestSettings);
                 });        
         })
         .catch(function (error) {
-            progressStepFail('Attach failed', progressMarker);
+            progressStepFail('Attach failed [' + error + ']', progressMarker);
             deferred.reject(nestSettings);
             return;
         });
@@ -1057,18 +1089,18 @@ function scaffoldService(nestSettings, key, dockerMachineIP, progressMarker, roo
 
     exec('docker port ' + nestSettings['byKey'][key].container_name + viewPort, (error, stdout, stderr) => {
 
-        if (stdout !== null)
-        {
-            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                   
-            progressStep(stdout, progressMarker);            
-        }
-
         if (error !== null) {
+            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                               
             progressStepFail(stderr, progressMarker);
             deferred.reject(nestSettings);
             return;
         }
 
+        if (stdout !== null)
+        {
+            progressStep(stdout, progressMarker);            
+        }
+        
         progressStep("Port found ... saving info on " + nestSettings['byKey'][key].container_name, progressMarker);
         var arr = stdout.trim().split(":");
         nestSettings['byKey'][key].environment['NEST_SERVICE_VIEW_PORT'] = arr[1];
@@ -1129,33 +1161,33 @@ function scaffold() : any {
         exec('docker-compose --file '+ theDevkit +' down', { 'cwd' : rootFolder }, 
             (error, stdout, stderr) => {
             
-            if (stdout !== null)
-            {
-                progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                
-                progressStep(stdout, progressMarker);            
-            }                
-                
             if (error !== null) {
+                progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                
                 progressStepFail(stderr, progressMarker);
                 deferred.reject();                
                 return;
             }
-
+                    
+            if (stdout !== null)
+            {
+                progressStep(stdout, progressMarker);            
+            }                
+                
             exec('docker-compose --file '+ theDevkit +' up -d', { 'cwd' : rootFolder }, 
                 (error, stdout, stderr) => {
-
-                if (stdout !== null)
-                {
-                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                           
-                    progressStep(stdout, progressMarker);            
-                }                
                                                     
                 if (error !== null) {
+                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);                    
                     progressStepFail(stderr, progressMarker);
                     deferred.reject();                
                     return;
                 }
-                                            
+
+                if (stdout !== null)
+                {
+                    progressStep(stdout, progressMarker);            
+                }                
+                
                 var services = [];
 
                 Object.keys(nestSettings['byKey']).forEach(function(key, index) {
@@ -1192,8 +1224,8 @@ function scaffold() : any {
                         }
 
                         setNestSettings(progressMarker, nestSettings);
-                        deferred.resolve(nestSettings);
-                        progressEnd(progressMarker);                        
+                        progressEnd(progressMarker);
+                        deferred.resolve(nestSettings);                        
                     }); 
                 });
             });

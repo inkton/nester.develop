@@ -1,120 +1,115 @@
 {
-  "name": "nester-develop",
-  "displayName": "Nester Develop",
-  "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
-  "version": "0.2.1",
-  "author": "Inkton",
-  "publisher": "inkton",
-  "icon": "images/nester-develop.png",
-  "engines": {
-    "vscode": "^1.17.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/inkton/nester.develop.git"
-  },  
-  "bugs": {
-    "url": "https://github.com/inkton/nester.develop/issues"
-  },  
-  "categories": [
-    "Debuggers",
-    "Other"
-  ],
-  "activationEvents": [
-    "onCommand:extension.dataup",
-    "onCommand:extension.datadown",
-    "onCommand:extension.viewdata",
-    "onCommand:extension.viewqueue",
-    "onCommand:extension.select",
-    "onCommand:extension.clean",
-    "onCommand:extension.clear",
-    "onCommand:extension.reset",
-    "onCommand:extension.build",
-    "onCommand:extension.push",
-    "onCommand:extension.pull",
-    "onCommand:extension.restore",
-    "onCommand:extension.scaffold",
-    "onCommand:extension.help"
-  ],
-  "main": "./out/extension",
-  "contributes": {
-    "commands": [
-      {
-        "command": "extension.dataup",
-        "title": "Nest Data Up"
-      },
-      {
-        "command": "extension.datadown",
-        "title": "Nest Data Down"
-      },
-      {
-        "command": "extension.viewdata",
-        "title": "Nest View Data"
-      },
-      {
-        "command": "extension.viewqueue",
-        "title": "Nest View Queue"
-      },
-      {
-        "command": "extension.select",
-        "title": "Nest Select"
-      },
-      {
-        "command": "extension.clean",
-        "title": "Nest Clean"
-      },
-      {
-        "command": "extension.clear",
-        "title": "Nest Clear"
-      },
-      {
-        "command": "extension.reset",
-        "title": "Nest Reset"
-      },
-      {
-        "command": "extension.build",
-        "title": "Nest Build"
-      },
-      {
-        "command": "extension.push",
-        "title": "Nest Push"
-      },
-      {
-        "command": "extension.pull",
-        "title": "Nest Pull"
-      },
-      {
-        "command": "extension.restore",
-        "title": "Nest Restore"
-      },
-      {
-        "command": "extension.scaffold",
-        "title": "Nest Scaffold"
-      },
-      {
-        "command": "extension.help",
-        "title": "Nest Help"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install",
-    "test": "npm run compile && node ./node_modules/vscode/bin/test"
-  },
-  "devDependencies": {
-    "typescript": "^2.5.3",
-    "vscode": "^1.1.5",
-    "@types/node": "^7.0.43",
-    "@types/mocha": "^2.2.42"
-  },
-  "dependencies": {
-    "child-process-promise": "^2.2.1",
-    "glob-fs": "^0.1.7",
-    "q": "^1.5.0",
-    "xml2js": "^0.4.17",
-    "yamljs": "^0.2.10"
-  }
+    "name": "nester-develop",
+    "displayName": "Nester Develop",
+    "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
+    "version": "1.3.0",
+    "author": "Inkton",
+    "publisher": "inkton",
+    "icon": "images/nester-develop.png",
+    "engines": {
+        "vscode": "^1.17.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/inkton/nester.develop.git"
+    },
+    "bugs": {
+        "url": "https://github.com/inkton/nester.develop/issues"
+    },
+    "categories": [
+        "Debuggers",
+        "Other"
+    ],
+    "activationEvents": [
+        "onCommand:extension.dataup",
+        "onCommand:extension.datadown",
+        "onCommand:extension.viewdata",
+        "onCommand:extension.viewqueue",
+        "onCommand:extension.select",
+        "onCommand:extension.clean",
+        "onCommand:extension.reset",
+        "onCommand:extension.build",
+        "onCommand:extension.push",
+        "onCommand:extension.pull",
+        "onCommand:extension.restore",
+        "onCommand:extension.scaffold",
+        "onCommand:extension.help"
+    ],
+    "main": "./out/extension",
+    "contributes": {
+        "commands": [
+            {
+                "command": "extension.dataup",
+                "title": "Nest Data Up"
+            },
+            {
+                "command": "extension.datadown",
+                "title": "Nest Data Down"
+            },
+            {
+                "command": "extension.viewdata",
+                "title": "Nest View Data"
+            },
+            {
+                "command": "extension.viewqueue",
+                "title": "Nest View Queue"
+            },
+            {
+                "command": "extension.select",
+                "title": "Nest Select"
+            },
+            {
+                "command": "extension.clean",
+                "title": "Nest Clean"
+            },
+            {
+                "command": "extension.reset",
+                "title": "Nest Reset"
+            },
+            {
+                "command": "extension.build",
+                "title": "Nest Build"
+            },
+            {
+                "command": "extension.push",
+                "title": "Nest Push"
+            },
+            {
+                "command": "extension.pull",
+                "title": "Nest Pull"
+            },
+            {
+                "command": "extension.restore",
+                "title": "Nest Restore"
+            },
+            {
+                "command": "extension.scaffold",
+                "title": "Nest Scaffold"
+            },
+            {
+                "command": "extension.help",
+                "title": "Nest Help"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "postinstall": "node ./node_modules/vscode/bin/install",
+        "test": "npm run compile && node ./node_modules/vscode/bin/test"
+    },
+    "devDependencies": {
+        "typescript": "^2.5.3",
+        "vscode": "^1.1.5",
+        "@types/node": "^7.0.43",
+        "@types/mocha": "^2.2.42"
+    },
+    "dependencies": {
+        "child-process-promise": "^2.2.1",
+        "glob-fs": "^0.1.7",
+        "q": "^1.5.0",
+        "xml2js": "^0.4.17",
+        "yamljs": "^0.2.10"
+    }
 }
