@@ -1,6 +1,6 @@
 # Nester Develop
 
-The Visual Studio Code tools and libraries to develop dotnet core applications deployed on the nest.yt PaaS.
+The Visual Studio Code extension to develop dotnet core applications deployed on the nest.yt PaaS.
 
 ### The Wiki
 
