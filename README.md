@@ -25,7 +25,4 @@ The Visual Studio Code extension to develop dotnet core applications deployed on
    2. [VS Code Integration](https://github.com/inkton/nester.develop/wiki/The-Git-Repository#vs-code-integration)
 5. [Shared Projects](https://github.com/inkton/nester.develop/wiki/Shared-Projects)
 6. [Workflows](https://github.com/inkton/nester.develop/wiki/Workflows)
-   1. [Debugging the Handler project](https://github.com/inkton/nester.develop/wiki/Workflows#debugging-the-handler-project)
-   2. [Debugging a Worker project](https://github.com/inkton/nester.develop/wiki/Workflows#debugging-a-worker-project)
-   3. [Working with the Database](https://github.com/inkton/nester.develop/wiki/Workflows#working-with-the-database)
 7. [NesterWorks](https://github.com/inkton/nester.develop/wiki/NesterWorks)
