@@ -42,3 +42,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Added
 - Kill command
+
+## [1.3.2] - 2018-01-16
+### Changed
+- If a default docker-machine is not found assume docker ip is localhost
+

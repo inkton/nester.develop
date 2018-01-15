@@ -857,14 +857,17 @@ function reset() : any
     exec('docker-machine ip', 
         (error, stdout, stderr) => {
 
-        if (error !== null) {
-            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);             
-            progressStepFail(stderr, progressMarker);
-            deferred.reject();                
-            return;
+        var dockerMachineIP = "127.0.0.1";
+        
+        if (error !== null) 
+        {
+            progressStep("docker-machine ip did not resolve docker ip.. using localhost", progressMarker);            
+        }
+        else
+        {
+            dockerMachineIP = stdout.trim();            
         }
 
-        var dockerMachineIP = stdout.trim();
         var services = [];
 
         Object.keys(nestSettings['byKey']).forEach(function(key, index) {
@@ -1193,15 +1196,17 @@ function scaffold() : any {
     exec('docker-machine ip', 
         (error, stdout, stderr) => {
 
-        if (error !== null) {
-            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);            
-            progressStepFail(stderr, progressMarker);
-            deferred.reject();                
-            return;
+        var dockerMachineIP = "127.0.0.1";
+        
+        if (error !== null) 
+        {
+            progressStep("docker-machine ip did not resolve docker ip.. using localhost", progressMarker);            
         }
-
-        var dockerMachineIP = stdout.trim();
-
+        else
+        {
+            dockerMachineIP = stdout.trim();            
+        }
+    
         progressStep("Docker IP is ... " + dockerMachineIP, progressMarker);
         progressStep("Composing docker containers", progressMarker);
         progressStep("The docker images will be downloaded and built", progressMarker);        
