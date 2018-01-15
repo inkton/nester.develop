@@ -34,3 +34,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Changed
 - Fixed message pop up for content pull.
 - Removed confusing 'clear' command.
+
+## [1.3.1] - 2017-12-16
+### Changed
+- Non-Ascii environment var handling.
+- Made few message text changes.
+
+### Added
+- Kill command
+
+## [1.3.2] - 2018-01-16
+### Changed
+- If a default docker-machine is not found assume docker ip is localhost
+

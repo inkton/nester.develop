@@ -2,7 +2,7 @@
     "name": "nester-develop",
     "displayName": "Nester Develop",
     "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
-    "version": "1.3.0",
+    "version": "1.3.2",
     "author": "Inkton",
     "publisher": "inkton",
     "icon": "images/nester-develop.png",
@@ -67,6 +67,10 @@
                 "title": "Nest Reset"
             },
             {
+                "command": "extension.kill",
+                "title": "Nest Kill"
+            },            
+            {
                 "command": "extension.build",
                 "title": "Nest Build"
             },
@@ -110,6 +114,7 @@
         "glob-fs": "^0.1.7",
         "q": "^1.5.0",
         "xml2js": "^0.4.17",
-        "yamljs": "^0.2.10"
+        "yamljs": "^0.2.10",
+        "remove-accents" :"0.4.2"
     }
 }

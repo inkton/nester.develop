@@ -13,6 +13,7 @@ var xml2js = require('xml2js');
 var glob = require('glob-fs')({ gitignore: true });
 var Q = require('q');
 var process = require('process');
+var accents = require('remove-accents');
 
 var notifier: {
     subject : string,
@@ -275,6 +276,7 @@ function runCommand(nestProject, command, progressMarker) : any {
         }        
         if (error !== null) {
             progressStep("Ensure docker is installed and is accessible from this environment", progressMarker); 
+            progressStep("Run <Nest Reset> command if docker containers are not running", progressMarker);             
             progressStepFail(stderr, progressMarker);
             deferred.reject(nestProject);                    
             return;
@@ -371,6 +373,22 @@ function createNestAssets(nestProject, launchConfig, progressMarker) : any
             }
         });
 
+        var projSettings = {
+            "omnisharp.path": "Nope"
+        };        
+
+        fs.writeFile(nestHost + '/.vscode/settings.json', 
+            JSON.stringify(projSettings, null, 2), 'utf-8', function(error) {
+
+            progressStep("Emitting " + nestHost + '/.vscode/settings.json', progressMarker);        
+
+            if (error !== null) {
+                progressStepFail('Failed to create ' + nestHost + '/.vscode/settings.json', progressMarker);
+                deferred.reject(nestProject);                
+                return;
+            }
+        });
+        
         const rootFolder = nestProject.environment['NEST_FOLDER_ROOT'];
         const nestShadowApp = '/var/app' + nestFolder;
 
@@ -499,13 +517,18 @@ function createNestProject(nestProject, progressMarker) : any
         };
 
         launchConfig['configurations'][0].env = nestProject.environment;
-        
+        var value;
+
         Object.keys(launchConfig['configurations'][0].env).forEach(function(key, index) {
             if (!isNaN(launchConfig['configurations'][0].env[key]))
             {
-                launchConfig['configurations'][0].env[key] = 
-                    launchConfig['configurations'][0].env[key].toString();
+                value = launchConfig['configurations'][0].env[key].toString();
             }
+            else
+            {
+                value = accents.remove(launchConfig['configurations'][0].env[key].toString()); 
+            }            
+            launchConfig['configurations'][0].env[key] = value;        
         });
 
         createNestAssets(nestProject, launchConfig, progressMarker)
@@ -596,9 +619,13 @@ function createNestProject(nestProject, progressMarker) : any
             Object.keys(launchConfig['configurations'][0].env).forEach(function(key, index) {
                 if (!isNaN(launchConfig['configurations'][0].env[key]))
                 {
-                    launchConfig['configurations'][0].env[key] = 
-                        launchConfig['configurations'][0].env[key].toString();
+                    value = launchConfig['configurations'][0].env[key].toString();
                 }
+                else
+                {
+                    value = accents.remove(launchConfig['configurations'][0].env[key].toString()); 
+                }
+                launchConfig['configurations'][0].env[key] = value;
             });
 
             createNestAssets(nestProject, launchConfig, progressMarker)
@@ -830,14 +857,17 @@ function reset() : any
     exec('docker-machine ip', 
         (error, stdout, stderr) => {
 
-        if (error !== null) {
-            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);             
-            progressStepFail(stderr, progressMarker);
-            deferred.reject();                
-            return;
+        var dockerMachineIP = "127.0.0.1";
+        
+        if (error !== null) 
+        {
+            progressStep("docker-machine ip did not resolve docker ip.. using localhost", progressMarker);            
+        }
+        else
+        {
+            dockerMachineIP = stdout.trim();            
         }
 
-        var dockerMachineIP = stdout.trim();
         var services = [];
 
         Object.keys(nestSettings['byKey']).forEach(function(key, index) {
@@ -881,6 +911,30 @@ function reset() : any
             });   
         });
     });
+
+   return deferred.promise;
+}
+
+/**
+ * up the kill
+ */
+function kill() : any {
+    const nestProject = getNestProject();
+    if (nestProject === null)
+        return false;
+
+    let deferred = Q.defer();
+    var progressMarker = progressStart("kill");
+
+    runCommand(nestProject, "nests kill", progressMarker)
+        .then(function (value) {
+            progressEnd(progressMarker);
+            deferred.resolve(nestProject);            
+        })
+        .catch(function (error) {
+            progressStepFail(error, progressMarker);
+            deferred.reject();            
+        });    
 
    return deferred.promise;
 }
@@ -1142,15 +1196,17 @@ function scaffold() : any {
     exec('docker-machine ip', 
         (error, stdout, stderr) => {
 
-        if (error !== null) {
-            progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);            
-            progressStepFail(stderr, progressMarker);
-            deferred.reject();                
-            return;
+        var dockerMachineIP = "127.0.0.1";
+        
+        if (error !== null) 
+        {
+            progressStep("docker-machine ip did not resolve docker ip.. using localhost", progressMarker);            
         }
-
-        var dockerMachineIP = stdout.trim();
-
+        else
+        {
+            dockerMachineIP = stdout.trim();            
+        }
+    
         progressStep("Docker IP is ... " + dockerMachineIP, progressMarker);
         progressStep("Composing docker containers", progressMarker);
         progressStep("The docker images will be downloaded and built", progressMarker);        
@@ -1253,6 +1309,7 @@ function help() : any {
         Nest Build, to build the project.
         Nest Clean, to clean the output.
         Nest Clear, to remove output folders.
+        Nest Kill, to kill the in-container run-time.        
         Nest Remap, to recapture ports.
         Nest Pull, to pull from production.
         Nest Push, to push in production.
@@ -1303,6 +1360,7 @@ export function activate(context: vscode.ExtensionContext) {
         let cleanDisposable = vscode.commands.registerCommand('extension.clean', () => { return showProgress(clean) });      
         let clearDisposable = vscode.commands.registerCommand('extension.clear', () => { return showProgress(clear) });              
         let resetDisposable = vscode.commands.registerCommand('extension.reset', () => { return showProgress(reset) });
+        let killDisposable = vscode.commands.registerCommand('extension.kill', () => { return showProgress(kill) });        
         let buildDisposable = vscode.commands.registerCommand('extension.build', () => { return showProgress(build) });
         let helpDisposable = vscode.commands.registerCommand('extension.help', () => help( ) );        
         let restoreDisposable = vscode.commands.registerCommand('extension.restore', () => { return showProgress(restore) });        
@@ -1336,9 +1394,10 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(pushDisposable);
         context.subscriptions.push(selectDisposable);
         context.subscriptions.push(cleanDisposable);
-        context.subscriptions.push(clearDisposable);        
+        context.subscriptions.push(clearDisposable);
         context.subscriptions.push(resetDisposable);
-        context.subscriptions.push(buildDisposable);   
+        context.subscriptions.push(buildDisposable);
+        context.subscriptions.push(killDisposable);           
         context.subscriptions.push(restoreDisposable);                  
         context.subscriptions.push(scaffoldDisposable);
         context.subscriptions.push(helpDisposable);
