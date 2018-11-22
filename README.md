@@ -1,9 +1,3 @@
-# Nester Develop
-
-The Visual Studio Code extension to develop dotnet core applications deployed on the nest.yt PaaS.
-
-### The Wiki
-
 1. [Home](https://github.com/inkton/nester.develop/wiki/Home)
 2. [Getting Started](https://github.com/inkton/nester.develop/wiki/Getting-Started)
    1. [VSCode Setup](https://github.com/inkton/nester.develop/wiki/Getting-Started#the-visual-studio-code-ide)
@@ -14,7 +8,7 @@ The Visual Studio Code extension to develop dotnet core applications deployed on
    4. [Nest Build](https://github.com/inkton/nester.develop/wiki/Nest-Build)
    5. [Nest Clean](https://github.com/inkton/nester.develop/wiki/Nest-Clean)
    6. [Nest Reset](https://github.com/inkton/nester.develop/wiki/Nest-Reset)
-   7. [Nest Kill](https://github.com/inkton/nester.develop/wiki/Nest-Kill)   
+   7. [Nest Kill](https://github.com/inkton/nester.develop/wiki/Nest-Kill)
    8. [Nest Pull](https://github.com/inkton/nester.develop/wiki/Nest-Pull)
    9. [Nest Push](https://github.com/inkton/nester.develop/wiki/Nest-Push)
    10. [Nest Data Down](https://github.com/inkton/nester.develop/wiki/Nest-Data-Down)
@@ -27,3 +21,7 @@ The Visual Studio Code extension to develop dotnet core applications deployed on
 5. [Shared Projects](https://github.com/inkton/nester.develop/wiki/Shared-Projects)
 6. [Workflows](https://github.com/inkton/nester.develop/wiki/Workflows)
 7. [NesterWorks](https://github.com/inkton/nester.develop/wiki/NesterWorks)
+7. [The Nest.Model](https://github.com/inkton/nest.model/wiki)
+8. [The Nester.Works](https://github.com/inkton/nester.works/wiki)
+9. [The Nester.Library](https://github.com/inkton/nester.library/wiki)
+10. [SSH to Production](https://github.com/inkton/nester.develop/wiki/SSH-to-Production)
