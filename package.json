@@ -2,7 +2,7 @@
   "name": "nester-develop",
   "displayName": "Nester Develop",
   "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "author": "Inkton",
   "publisher": "inkton",
   "icon": "images/nester-develop.png",
@@ -33,6 +33,7 @@
     "onCommand:nester.push",
     "onCommand:nester.pull",
     "onCommand:nester.restore",
+    "onCommand:nester.coreclrdown",
     "onCommand:nester.scaffold",
     "onCommand:nester.help",
     "workspaceContains:*.devkit",
@@ -90,6 +91,10 @@
       {
         "command": "nester.restore",
         "title": "Nest Restore"
+      },
+      {
+        "command": "nester.coreclrdown",
+        "title": "Nest CoreCLR Down"
       },
       {
         "command": "nester.scaffold",

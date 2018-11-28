@@ -1422,7 +1422,7 @@ function installCoreClrDebugger(context, debuggerPath) : any {
         file.on('finish', function() {
             file.close();  // close() is async, call cb after close completes.
 
-            progressStep("Download complete", progressMarker);
+            progressStep("Download complete, installing ..", progressMarker);
 
             var zip = new streamZip({
                 file: zippedFile, 
