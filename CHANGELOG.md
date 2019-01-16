@@ -47,3 +47,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Changed
 - If a default docker-machine is not found assume docker ip is localhost
 
+ ## [1.3.2] - 2018-01-16
+### Changed
+- If a default docker-machine is not found assume docker ip is localhost
+
+ ## [1.3.2] - 2018-01-16
+### Changed
+- If a default docker-machine is not found assume docker ip is localhost
+
+ ## [1.5.2] - 2019-01-16
+### Added
+- Jenkins Ci/Cd support. View, kick off Ci/Cd tasks supported 
+- Unit test testing/debugging supported
+### Changed
+- Scaffold changed to Scaffold Up/Down commands 
