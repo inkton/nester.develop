@@ -1,48 +1,83 @@
 {
+  "version": "1.5.2",
   "name": "nester-develop",
-  "displayName": "Nester Develop",
-  "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
-  "version": "1.5.1",
-  "author": "Inkton",
   "publisher": "inkton",
+  "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
+  "displayName": "Nester Develop",
+  "author": "Inkton",
   "icon": "images/nester-develop.png",
-  "engines": {
-    "vscode": "^1.29.0"
+  "bugs": {
+    "url": "https://github.com/inkton/nester.develop/issues"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/inkton/nester.develop.git"
   },
-  "bugs": {
-    "url": "https://github.com/inkton/nester.develop/issues"
-  },
   "categories": [
     "Debuggers",
     "Programming Languages"
   ],
+  "main": "./out/extension",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node ./node_modules/vscode/bin/test",
+    "postinstall": "node ./node_modules/vscode/bin/install"
+  },
+  "dependencies": {
+    "child-process-promise": "^2.2.1",
+    "q": "^1.5.0",
+    "xml2js": "^0.4.17",
+    "yamljs": "^0.2.10",
+    "remove-accents": "0.4.2",
+    "node-stream-zip": "1.7.0",
+    "encodeurl": "1.0.2"
+  },
+  "devDependencies": {
+    "@types/mocha": "^2.2.48",
+    "@types/node": "^7.10.2",
+    "typescript": "^2.9.2",
+    "vscode": "^1.1.26"
+  },
+  "engines": {
+    "vscode": "^1.30.1"
+  },
   "activationEvents": [
     "onDebug",
+    "onCommand:nester.unittestprocid",
     "onCommand:nester.dataup",
     "onCommand:nester.datadown",
     "onCommand:nester.viewdata",
     "onCommand:nester.viewqueue",
+    "onCommand:nester.viewcicd",
     "onCommand:nester.select",
     "onCommand:nester.clean",
     "onCommand:nester.reset",
     "onCommand:nester.build",
+    "onCommand:nester.unittestcleanbuild",
     "onCommand:nester.push",
     "onCommand:nester.pull",
+    "onCommand:nester.deploy",
+    "onCommand:nester.kickci",
+    "onCommand:nester.kickcd",
     "onCommand:nester.restore",
     "onCommand:nester.coreclrdown",
-    "onCommand:nester.scaffold",
+    "onCommand:nester.scaffoldup",
+    "onCommand:nester.scaffolddown",
     "onCommand:nester.help",
     "workspaceContains:*.devkit",
     "workspaceContains:nest.json",
     "workspaceContains:**/*.devkit",
     "workspaceContains:**/nest.json"
   ],
-  "main": "./out/extension",
   "contributes": {
+    "jsonValidation": [
+      {
+        "fileMatch": "nest.json",
+        "url": "http://nest.yt/json_schemas/nest_project"
+      }
+    ],
     "commands": [
       {
         "command": "nester.dataup",
@@ -59,6 +94,10 @@
       {
         "command": "nester.viewqueue",
         "title": "Nest View Queue"
+      },
+      {
+        "command": "nester.viewcicd",
+        "title": "Nest View Ci/Cd"
       },
       {
         "command": "nester.select",
@@ -81,12 +120,28 @@
         "title": "Nest Build"
       },
       {
-        "command": "nester.push",
-        "title": "Nest Push"
+        "command": "nester.unittestcleanbuild",
+        "title": "Nest Unit Test Clean Build"
       },
       {
         "command": "nester.pull",
         "title": "Nest Pull"
+      },
+      {
+        "command": "nester.push",
+        "title": "Nest Push"
+      },
+      {
+        "command": "nester.deploy",
+        "title": "Nest Deploy"
+      },
+      {
+        "command": "nester.kickci",
+        "title": "Nest Kick Ci"
+      },
+      {
+        "command": "nester.kickcd",
+        "title": "Nest Kick Cd"
       },
       {
         "command": "nester.restore",
@@ -97,17 +152,16 @@
         "title": "Nest CoreCLR Down"
       },
       {
-        "command": "nester.scaffold",
-        "title": "Nest Scaffold"
+        "command": "nester.scaffoldup",
+        "title": "Nest Scaffold Up"
+      },
+      {
+        "command": "nester.scaffolddown",
+        "title": "Nest Scaffold Down"
       },
       {
         "command": "nester.help",
         "title": "Nest Help"
-      }
-    ],
-    "breakpoints": [
-      {
-        "language": "csharp"
       }
     ],
     "debuggers": [
@@ -120,6 +174,7 @@
             "razor"
           ]
         },
+        "adapterExecutableCommand": "nester.debug",
         "configurationAttributes": {
           "launch": {
             "type": "object",
@@ -183,6 +238,7 @@
                     "default": true
                   },
                   "args": {
+                    "default": "${auto-detect-url}",
                     "anyOf": [
                       {
                         "type": "array",
@@ -197,8 +253,7 @@
                         "description": "Stringified version of command line arguments passed to the program.",
                         "default": ""
                       }
-                    ],
-                    "default": "${auto-detect-url}"
+                    ]
                   },
                   "osx": {
                     "description": "OSX-specific web launch configuration options",
@@ -670,38 +725,317 @@
                 }
               }
             }
+          },
+          "attach": {
+            "type": "object",
+            "required": [],
+            "properties": {
+              "processName": {
+                "type": "string",
+                "description": "",
+                "default": "The process name to attach to. If this is used, 'processId' should not be used."
+              },
+              "processId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "The process id to attach to. Use \"${command:pickProcesss}\" to get a list of running processes to attach to. If 'processId' used, 'processName' should not be used.",
+                    "default": "${command:pickProcess}"
+                  },
+                  {
+                    "type": "integer",
+                    "description": "The process id to attach to. Use \"${command:pickProcesss}\" to get a list of running processes to attach to. If 'processId' used, 'processName' should not be used.",
+                    "default": 0
+                  }
+                ]
+              },
+              "sourceFileMap": {
+                "type": "object",
+                "description": "Optional source file mappings passed to the debug engine. Example: '{ \"C:\\foo\":\"/home/user/foo\" }'",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "default": {
+                  "<insert-source-path-here>": "<insert-target-path-here>"
+                }
+              },
+              "justMyCode": {
+                "type": "boolean",
+                "description": "Optional flag to only show user code.",
+                "default": true
+              },
+              "requireExactSource": {
+                "type": "boolean",
+                "description": "Optional flag to require current source code to match the pdb.",
+                "default": true
+              },
+              "enableStepFiltering": {
+                "type": "boolean",
+                "description": "Optional flag to enable stepping over Properties and Operators.",
+                "default": true
+              },
+              "logging": {
+                "description": "Optional flags to determine what types of messages should be logged to the output window.",
+                "type": "object",
+                "required": [],
+                "default": {},
+                "properties": {
+                  "exceptions": {
+                    "type": "boolean",
+                    "description": "Optional flag to determine whether exception messages should be logged to the output window.",
+                    "default": true
+                  },
+                  "moduleLoad": {
+                    "type": "boolean",
+                    "description": "Optional flag to determine whether module load events should be logged to the output window.",
+                    "default": true
+                  },
+                  "programOutput": {
+                    "type": "boolean",
+                    "description": "Optional flag to determine whether program output should be logged to the output window when not using an external console.",
+                    "default": true
+                  },
+                  "engineLogging": {
+                    "type": "boolean",
+                    "description": "Optional flag to determine whether diagnostic engine logs should be logged to the output window.",
+                    "default": false
+                  },
+                  "browserStdOut": {
+                    "type": "boolean",
+                    "description": "Optional flag to determine if stdout text from the launching the web browser should be logged to the output window.",
+                    "default": true
+                  }
+                }
+              },
+              "pipeTransport": {
+                "description": "When present, this tells the debugger to connect to a remote computer using another executable as a pipe that will relay standard input/output between VS Code and the .NET Core debugger backend executable (vsdbg).",
+                "type": "object",
+                "required": [
+                  "debuggerPath"
+                ],
+                "default": {
+                  "pipeCwd": "${workspaceFolder}",
+                  "pipeProgram": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'",
+                  "pipeArgs": [],
+                  "debuggerPath": "enter the path for the debugger on the target machine, for example ~/vsdbg/vsdbg"
+                },
+                "properties": {
+                  "pipeCwd": {
+                    "type": "string",
+                    "description": "The fully qualified path to the working directory for the pipe program.",
+                    "default": "${workspaceFolder}"
+                  },
+                  "pipeProgram": {
+                    "type": "string",
+                    "description": "The fully qualified pipe command to execute.",
+                    "default": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'"
+                  },
+                  "pipeArgs": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "description": "Command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "default": []
+                      },
+                      {
+                        "type": "string",
+                        "description": "Stringified version of command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                        "default": ""
+                      }
+                    ],
+                    "default": []
+                  },
+                  "debuggerPath": {
+                    "type": "string",
+                    "description": "The full path to the debugger on the target machine.",
+                    "default": "enter the path for the debugger on the target machine, for example ~/vsdbg/vsdbg"
+                  },
+                  "pipeEnv": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Environment variables passed to the pipe program.",
+                    "default": {}
+                  },
+                  "quoteArgs": {
+                    "type": "boolean",
+                    "description": "Should arguments that contain characters that need to be quoted (example: spaces) be quoted? Defaults to 'true'. If set to false, the debugger command will no longer be automatically quoted.",
+                    "default": true
+                  },
+                  "windows": {
+                    "description": "Windows-specific pipe launch configuration options",
+                    "default": {
+                      "pipeCwd": "${workspaceFolder}",
+                      "pipeProgram": "enter the fully qualified path for the pipe program name, for example 'c:\\tools\\plink.exe'",
+                      "pipeArgs": []
+                    },
+                    "type": "object",
+                    "properties": {
+                      "pipeCwd": {
+                        "type": "string",
+                        "description": "The fully qualified path to the working directory for the pipe program.",
+                        "default": "${workspaceFolder}"
+                      },
+                      "pipeProgram": {
+                        "type": "string",
+                        "description": "The fully qualified pipe command to execute.",
+                        "default": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'"
+                      },
+                      "pipeArgs": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "description": "Command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "default": []
+                          },
+                          {
+                            "type": "string",
+                            "description": "Stringified version of command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                            "default": ""
+                          }
+                        ],
+                        "default": []
+                      },
+                      "quoteArgs": {
+                        "type": "boolean",
+                        "description": "Should arguments that contain characters that need to be quoted (example: spaces) be quoted? Defaults to 'true'. If set to false, the debugger command will no longer be automatically quoted.",
+                        "default": true
+                      },
+                      "pipeEnv": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "Environment variables passed to the pipe program.",
+                        "default": {}
+                      }
+                    }
+                  },
+                  "osx": {
+                    "description": "OSX-specific pipe launch configuration options",
+                    "default": {
+                      "pipeCwd": "${workspaceFolder}",
+                      "pipeProgram": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'",
+                      "pipeArgs": []
+                    },
+                    "type": "object",
+                    "properties": {
+                      "pipeCwd": {
+                        "type": "string",
+                        "description": "The fully qualified path to the working directory for the pipe program.",
+                        "default": "${workspaceFolder}"
+                      },
+                      "pipeProgram": {
+                        "type": "string",
+                        "description": "The fully qualified pipe command to execute.",
+                        "default": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'"
+                      },
+                      "pipeArgs": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "description": "Command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "default": []
+                          },
+                          {
+                            "type": "string",
+                            "description": "Stringified version of command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                            "default": ""
+                          }
+                        ],
+                        "default": []
+                      },
+                      "quoteArgs": {
+                        "type": "boolean",
+                        "description": "Should arguments that contain characters that need to be quoted (example: spaces) be quoted? Defaults to 'true'. If set to false, the debugger command will no longer be automatically quoted.",
+                        "default": true
+                      },
+                      "pipeEnv": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "Environment variables passed to the pipe program.",
+                        "default": {}
+                      }
+                    }
+                  },
+                  "linux": {
+                    "description": "Linux-specific pipe launch configuration options",
+                    "default": {
+                      "pipeCwd": "${workspaceFolder}",
+                      "pipeProgram": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'",
+                      "pipeArgs": []
+                    },
+                    "type": "object",
+                    "properties": {
+                      "pipeCwd": {
+                        "type": "string",
+                        "description": "The fully qualified path to the working directory for the pipe program.",
+                        "default": "${workspaceFolder}"
+                      },
+                      "pipeProgram": {
+                        "type": "string",
+                        "description": "The fully qualified pipe command to execute.",
+                        "default": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'"
+                      },
+                      "pipeArgs": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "description": "Command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                            "items": {
+                              "type": "string"
+                            },
+                            "default": []
+                          },
+                          {
+                            "type": "string",
+                            "description": "Stringified version of command line arguments passed to the pipe program. Token ${debuggerCommand} in pipeArgs will get replaced by the full debugger command, this token can be specified inline with other arguments. If ${debuggerCommand} isn’t used in any argument, the full debugger command will be instead be added to the end of the argument list.",
+                            "default": ""
+                          }
+                        ],
+                        "default": []
+                      },
+                      "quoteArgs": {
+                        "type": "boolean",
+                        "description": "Should arguments that contain characters that need to be quoted (example: spaces) be quoted? Defaults to 'true'. If set to false, the debugger command will no longer be automatically quoted.",
+                        "default": true
+                      },
+                      "pipeEnv": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "Environment variables passed to the pipe program.",
+                        "default": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
-        "adapterExecutableCommand": "nester.debug"
+				"variables": {
+					"unitTestProcId": "nester.unittestprocid"
+				}        
       }
     ],
-    "jsonValidation": [
+    "breakpoints": [
       {
-        "fileMatch": "nest.json",
-        "url": "http://nest.yt/json_schemas/nest_project"
+        "language": "csharp"
       }
     ]
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install",
-    "test": "npm run compile && node ./node_modules/vscode/bin/test"
-  },
-  "devDependencies": {
-    "typescript": "^2.9.2",
-    "vscode": "^1.1.21",
-    "@types/node": "^7.10.1",
-    "@types/mocha": "^2.2.48"
-  },
-  "dependencies": {
-    "child-process-promise": "^2.2.1",
-    "glob-fs": "^0.1.7",
-    "q": "^1.5.0",
-    "xml2js": "^0.4.17",
-    "yamljs": "^0.2.10",
-    "remove-accents": "0.4.2",
-    "node-stream-zip": "1.7.0"
   }
 }
