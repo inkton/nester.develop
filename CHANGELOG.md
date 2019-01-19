@@ -61,3 +61,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Unit test testing/debugging supported
 ### Changed
 - Scaffold changed to Scaffold Up/Down commands 
+
+## [1.5.3] - 2019-01-19
+### Changed
+- Scaffold changed to Scaffold Up/Down commands 
