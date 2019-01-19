@@ -175,7 +175,7 @@ function getNestProject(showAlert = true) : any {
 
     if (showAlert)
     {
-        showError('Please open a folder with a valid Nest project first');
+        showError('Please open a folder with a valid Nest project (nest.json)  first');
     }
 
     return null;
@@ -414,36 +414,37 @@ function createNestAssets(nestProject, launchConfig, progressMarker) : any
 
         // configure the nest debug
         const nestShadowApp = '/var/app/source/' + nestTagCap + '/src/';
-        var hostWorkspacePath = "${workspaceFolder}";
+        var hostSrcWorkspacePath = "${workspaceFolder}";
 
         if (os.platform() === 'win32') {
-            hostWorkspacePath += "\\src";
+            hostSrcWorkspacePath += "\\src";
         }
         else
         {
-            hostWorkspacePath += "/src";
+            hostSrcWorkspacePath += "/src";
         }
 
         launchConfig['configurations'][0]['cwd'] = nestShadowApp;
         launchConfig['configurations'][0]['program'] = nestShadowApp;
         launchConfig['configurations'][0].sourceFileMap = {};
-        launchConfig['configurations'][0].sourceFileMap[nestShadowApp] = hostWorkspacePath;
+        launchConfig['configurations'][0].sourceFileMap[nestShadowApp] = hostSrcWorkspacePath;
         launchConfig['configurations'][0].sourceFileMap['/var/app/source/shared'] = thisSharedPath;        
 
         // configure the unit test debug
         const nestShadowUnitTest = '/var/app/source/' + nestTagCap + '/test/';
-        hostWorkspacePath = "${workspaceFolder}";
+        var hostTestWorkspacePath = "${workspaceFolder}";
 
         if (os.platform() === 'win32') {
-            hostWorkspacePath += "\\test";
+            hostTestWorkspacePath += "\\test";
         }
         else
         {
-            hostWorkspacePath += "/test";
+            hostTestWorkspacePath += "/test";
         }
 
         launchConfig['configurations'][1].sourceFileMap = {};
-        launchConfig['configurations'][1].sourceFileMap[nestShadowUnitTest] = hostWorkspacePath;
+        launchConfig['configurations'][1].sourceFileMap[nestShadowApp] = hostSrcWorkspacePath;
+        launchConfig['configurations'][1].sourceFileMap[nestShadowUnitTest] = hostTestWorkspacePath;
         launchConfig['configurations'][1].sourceFileMap['/var/app/source/shared'] = thisSharedPath;        
 
         var parser = new xml2js.Parser();
@@ -474,8 +475,6 @@ function createNestAssets(nestProject, launchConfig, progressMarker) : any
                         "exec -i " + nestProject.container_name 
                     ];
 
-                launchConfig['configurations'][1]['program'] +=  'bin/Debug/' +
-                    result.Project.PropertyGroup[0].TargetFramework[0] + '/' + nestTagCap + '.dll';
                 launchConfig['configurations'][1]['pipeTransport'].pipeArgs = [
                         "exec -i " + nestProject.container_name 
                     ];
@@ -772,6 +771,10 @@ function debug(debuggerPath) : any  {
     if (os.platform() === 'win32') {
         adapter += ".exe";
     }
+    else
+    {
+        fs.chmodSync(adapter, '0755');
+    }
     
     return {command: adapter};
 }
@@ -857,11 +860,9 @@ function viewData() : any {
 
     var progressMarker = progressStart("view data");    
     var nestSettings = getNestSettings();
-
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStep('No nest projects found', progressMarker);
-        progressEnd(progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         return;
     }
 
@@ -893,9 +894,9 @@ function viewQueue() : any
 {
     var progressMarker = progressStart("view queue");
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         return;
     }
 
@@ -927,9 +928,9 @@ function viewCiCd() : any {
 
     var progressMarker = progressStart("view continous integration");
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         return;
     }
 
@@ -961,9 +962,9 @@ function select() : any {
 
     var progressMarker = progressStart("select project");
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         return;
     }
 
@@ -983,7 +984,7 @@ function select() : any {
                 var proj = nestSettings['byKey'][selected];
                 if (proj) {
                     const rootFolder = getRootFolder();
-                    let uri = vscode.Uri.parse('file:///' + rootFolder + '/source/' + proj.environment['NEST_TAG_CAP']);
+                    let uri = vscode.Uri.parse("file://" + rootFolder + '/source/' + proj.environment['NEST_TAG_CAP']);
                     vscode.commands.executeCommand('vscode.openFolder', uri);
                 }
                 else
@@ -1058,15 +1059,17 @@ function reset() : any
         return false;
     }
 
+    let deferred = Q.defer();
+    var progressMarker = progressStart("reset");
+
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
+        deferred.reject();
         return;
     }
 
-    let deferred = Q.defer();
-    var progressMarker = progressStart("reset");
     const rootFolder = getRootFolder();
 
     exec('docker-machine ip',
@@ -1201,9 +1204,9 @@ function build() : any {
     let deferred = Q.defer();
 
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         deferred.reject();
         return;
     }
@@ -1237,9 +1240,9 @@ function unitTestCleanBuild() : any {
     let deferred = Q.defer();
 
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         deferred.reject();
         return;
     }
@@ -1412,9 +1415,9 @@ function kickCi() : any {
     var progressMarker = progressStart("kicking off a ci session");
 
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         return;
     }
 
@@ -1430,9 +1433,9 @@ function kickCd() : any {
     var progressMarker = progressStart("kicking off a cd session");
 
     var nestSettings = getNestSettings();
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         return;
     }
 
@@ -1614,9 +1617,9 @@ function scaffoldUp() : any
     let deferred = Q.defer();
 
     var nestSettings = discoverNestSettings(progressMarker);
-    if (!nestSettings || nestSettings['names'].length === 0)
+    if (!nestSettings)
     {
-        progressStepFail('No nest projects found', progressMarker);
+        progressStepFail('No nest settings found', progressMarker);
         deferred.reject();
         return;
     }
@@ -1890,32 +1893,41 @@ function installCoreClrDebugger(context, debuggerPath) : any {
 
     let platform = os.platform();
     let archive = null;
- 
+    let downloadUrl = "https://vsdebugger.blob.core.windows.net";
+
     switch (platform) {
         case 'win32':
-            archive = "https://vsdebugger.blob.core.windows.net/coreclr-debug-1-16-0/coreclr-debug-win7-x64.zip";
+            archive = "coreclr-debug-win7-x64.zip";
             break;
         case 'darwin':
-            archive = "https://vsdebugger.blob.core.windows.net/coreclr-debug-1-16-0/coreclr-debug-osx-x64.zip";
+            archive = "coreclr-debug-osx-x64.zip";
             break;
         case 'linux':
-            archive = "https://vsdebugger.blob.core.windows.net/coreclr-debug-1-16-0/coreclr-debug-linux-x64.zip";
+            archive = "coreclr-debug-linux-x64.zip";
             break;
         default:
             progressStepFail(`Unsupported platform: ${platform}`, progressMarker);
             return deferred.reject();
     }
    
-    progressStep("Downloading " + archive, progressMarker);
-    var zippedFile = path.resolve(os.tmpdir(), "omnisharp-linux-x64-1.32.5.zip");
+    downloadUrl += archive;
+    progressStep("Setting up the debugger ...", progressMarker);
+    var zippedFile = path.resolve(os.tmpdir(), archive);
+
+    const options = {
+        hostname: "vsdebugger.blob.core.windows.net",
+        port: 443,
+        path: '/coreclr-debug-1-16-0/' + archive,
+        method: 'GET'
+      };
 
     var file = fs.createWriteStream(zippedFile);
-    https.get(archive, function(response) {
+    https.get(options, function(response) {
         response.pipe(file);
         file.on('finish', function() {
             file.close();  // close() is async, call cb after close completes.
 
-            progressStep("Download complete, installing ..", progressMarker);
+            progressStep("Nearly there ..", progressMarker);
 
             var zip = new streamZip({
                 file: zippedFile, 

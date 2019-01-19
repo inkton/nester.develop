@@ -1,5 +1,5 @@
 {
-  "version": "1.5.2",
+  "version": "1.5.3",
   "name": "nester-develop",
   "publisher": "inkton",
   "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
@@ -41,7 +41,7 @@
     "vscode": "^1.1.26"
   },
   "engines": {
-    "vscode": "^1.30.1"
+    "vscode": "^1.30.2"
   },
   "activationEvents": [
     "onDebug",
@@ -1027,9 +1027,9 @@
             }
           }
         },
-				"variables": {
-					"unitTestProcId": "nester.unittestprocid"
-				}        
+        "variables": {
+          "unitTestProcId": "nester.unittestprocid"
+        }
       }
     ],
     "breakpoints": [
