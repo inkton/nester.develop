@@ -65,3 +65,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [1.5.3] - 2019-01-19
 ### Changed
 - Scaffold changed to Scaffold Up/Down commands 
+
+## [1.5.4] - 2019-01-21
+### Changed
+- Added acknowledgements and removed json validator from project.json

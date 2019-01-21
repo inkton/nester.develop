@@ -1,3 +1,5 @@
+**NESTER DEVLELOP COMMANDS**
+
 1. [Home](https://github.com/inkton/nester.develop/wiki/Home)
 2. [Getting Started](https://github.com/inkton/nester.develop/wiki/Getting-Started)
    1. [VSCode Setup](https://github.com/inkton/nester.develop/wiki/Getting-Started#the-visual-studio-code-ide)
@@ -26,3 +28,9 @@
 8. [The Nester.Works](https://github.com/inkton/nester.works/wiki)
 9. [The Nester.Library](https://github.com/inkton/nester.library/wiki)
 10. [SSH to Production](https://github.com/inkton/nester.develop/wiki/SSH-to-Production)
+
+
+**ACKNOWLEDGEMENTS**
+
+The plugin was developed taking omnisharp-vscode as a guide. The package.json contain extracts taken from omnisharp-vscode plugin to configure projects that can be launched.
+
