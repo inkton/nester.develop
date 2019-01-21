@@ -1,5 +1,5 @@
 {
-  "version": "1.5.3",
+  "version": "1.5.4",
   "name": "nester-develop",
   "publisher": "inkton",
   "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
@@ -67,17 +67,9 @@
     "onCommand:nester.scaffolddown",
     "onCommand:nester.help",
     "workspaceContains:*.devkit",
-    "workspaceContains:nest.json",
-    "workspaceContains:**/*.devkit",
-    "workspaceContains:**/nest.json"
+    "workspaceContains:nest.json"
   ],
   "contributes": {
-    "jsonValidation": [
-      {
-        "fileMatch": "nest.json",
-        "url": "http://nest.yt/json_schemas/nest_project"
-      }
-    ],
     "commands": [
       {
         "command": "nester.dataup",
