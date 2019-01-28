@@ -69,3 +69,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [1.5.4] - 2019-01-21
 ### Changed
 - Added acknowledgements and removed json validator from project.json
+
+## [1.5.5] - 2019-01-28
+### Changed
+- The pull function split into pull and checkout commands
+- The user is able to select the shared folder from the select menu
+- The SSH certs now properly created for Git push/pull over SSH
+
+
