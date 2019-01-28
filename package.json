@@ -1,45 +1,10 @@
 {
-  "version": "1.5.4",
   "name": "nester-develop",
-  "publisher": "inkton",
-  "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
   "displayName": "Nester Develop",
-  "author": "Inkton",
+  "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
+  "version": "1.5.5",
+  "publisher": "inkton",
   "icon": "images/nester-develop.png",
-  "bugs": {
-    "url": "https://github.com/inkton/nester.develop/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/inkton/nester.develop.git"
-  },
-  "categories": [
-    "Debuggers",
-    "Programming Languages"
-  ],
-  "main": "./out/extension",
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node ./node_modules/vscode/bin/test",
-    "postinstall": "node ./node_modules/vscode/bin/install"
-  },
-  "dependencies": {
-    "child-process-promise": "^2.2.1",
-    "q": "^1.5.0",
-    "xml2js": "^0.4.17",
-    "yamljs": "^0.2.10",
-    "remove-accents": "0.4.2",
-    "node-stream-zip": "1.7.0",
-    "encodeurl": "1.0.2"
-  },
-  "devDependencies": {
-    "@types/mocha": "^2.2.48",
-    "@types/node": "^7.10.2",
-    "typescript": "^2.9.2",
-    "vscode": "^1.1.26"
-  },
   "engines": {
     "vscode": "^1.30.2"
   },
@@ -58,6 +23,7 @@
     "onCommand:nester.unittestcleanbuild",
     "onCommand:nester.push",
     "onCommand:nester.pull",
+    "onCommand:nester.checkout",
     "onCommand:nester.deploy",
     "onCommand:nester.kickci",
     "onCommand:nester.kickcd",
@@ -69,107 +35,43 @@
     "workspaceContains:*.devkit",
     "workspaceContains:nest.json"
   ],
+  "main": "./out/extension",
+  "author": "Inkton",
+  "categories": [
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "dependencies": {
+    "child-process-promise": "^2.2.1",
+    "encodeurl": "1.0.2",
+    "hidefile": "^2.0.0",
+    "node-stream-zip": "1.7.0",
+    "q": "^1.5.0",
+    "remove-accents": "0.4.2",
+    "simple-git": "^1.107.0",
+    "tslint": "^5.12.1",
+    "xml2js": "^0.4.17",
+    "yamljs": "^0.2.10"
+  },
+  "bugs": {
+    "url": "https://github.com/inkton/nester.develop/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inkton/nester.develop.git"
+  },
   "contributes": {
-    "commands": [
+    "breakpoints": [
       {
-        "command": "nester.dataup",
-        "title": "Nest Data Up"
-      },
-      {
-        "command": "nester.datadown",
-        "title": "Nest Data Down"
-      },
-      {
-        "command": "nester.viewdata",
-        "title": "Nest View Data"
-      },
-      {
-        "command": "nester.viewqueue",
-        "title": "Nest View Queue"
-      },
-      {
-        "command": "nester.viewcicd",
-        "title": "Nest View Ci/Cd"
-      },
-      {
-        "command": "nester.select",
-        "title": "Nest Select"
-      },
-      {
-        "command": "nester.clean",
-        "title": "Nest Clean"
-      },
-      {
-        "command": "nester.reset",
-        "title": "Nest Reset"
-      },
-      {
-        "command": "nester.kill",
-        "title": "Nest Kill"
-      },
-      {
-        "command": "nester.build",
-        "title": "Nest Build"
-      },
-      {
-        "command": "nester.unittestcleanbuild",
-        "title": "Nest Unit Test Clean Build"
-      },
-      {
-        "command": "nester.pull",
-        "title": "Nest Pull"
-      },
-      {
-        "command": "nester.push",
-        "title": "Nest Push"
-      },
-      {
-        "command": "nester.deploy",
-        "title": "Nest Deploy"
-      },
-      {
-        "command": "nester.kickci",
-        "title": "Nest Kick Ci"
-      },
-      {
-        "command": "nester.kickcd",
-        "title": "Nest Kick Cd"
-      },
-      {
-        "command": "nester.restore",
-        "title": "Nest Restore"
-      },
-      {
-        "command": "nester.coreclrdown",
-        "title": "Nest CoreCLR Down"
-      },
-      {
-        "command": "nester.scaffoldup",
-        "title": "Nest Scaffold Up"
-      },
-      {
-        "command": "nester.scaffolddown",
-        "title": "Nest Scaffold Down"
-      },
-      {
-        "command": "nester.help",
-        "title": "Nest Help"
+        "language": "csharp"
       }
     ],
     "debuggers": [
       {
         "type": "coreclr",
         "label": ".NET Core @ Nest.yt",
-        "enableBreakpointsFor": {
-          "languageIds": [
-            "csharp",
-            "razor"
-          ]
-        },
-        "adapterExecutableCommand": "nester.debug",
         "configurationAttributes": {
           "launch": {
-            "type": "object",
             "required": [
               "program"
             ],
@@ -716,7 +618,8 @@
                   }
                 }
               }
-            }
+            },
+            "type": "object"
           },
           "attach": {
             "type": "object",
@@ -755,6 +658,19 @@
                 "type": "boolean",
                 "description": "Optional flag to only show user code.",
                 "default": true
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Environment variables passed to the program.",
+                "default": {}
+              },
+              "envFile": {
+                "type": "string",
+                "description": "Environment variables passed to the program by a file.",
+                "default": "${workspaceFolder}/.env"
               },
               "requireExactSource": {
                 "type": "boolean",
@@ -1019,15 +935,120 @@
             }
           }
         },
+        "enableBreakpointsFor": {
+          "languageIds": [
+            "csharp",
+            "razor"
+          ]
+        },
+        "adapterExecutableCommand": "nester.debug",
         "variables": {
           "unitTestProcId": "nester.unittestprocid"
         }
       }
     ],
-    "breakpoints": [
+    "commands": [
       {
-        "language": "csharp"
+        "command": "nester.dataup",
+        "title": "Nest Data Up"
+      },
+      {
+        "command": "nester.datadown",
+        "title": "Nest Data Down"
+      },
+      {
+        "command": "nester.viewdata",
+        "title": "Nest View Data"
+      },
+      {
+        "command": "nester.viewqueue",
+        "title": "Nest View Queue"
+      },
+      {
+        "command": "nester.viewcicd",
+        "title": "Nest View Ci/Cd"
+      },
+      {
+        "command": "nester.select",
+        "title": "Nest Select"
+      },
+      {
+        "command": "nester.clean",
+        "title": "Nest Clean"
+      },
+      {
+        "command": "nester.reset",
+        "title": "Nest Reset"
+      },
+      {
+        "command": "nester.kill",
+        "title": "Nest Kill"
+      },
+      {
+        "command": "nester.build",
+        "title": "Nest Build"
+      },
+      {
+        "command": "nester.unittestcleanbuild",
+        "title": "Nest Unit Test Clean Build"
+      },
+      {
+        "command": "nester.pull",
+        "title": "Nest Pull"
+      },
+      {
+        "command": "nester.push",
+        "title": "Nest Push"
+      },
+      {
+        "command": "nester.checkout",
+        "title": "Nest Checkout"
+      },
+      {
+        "command": "nester.deploy",
+        "title": "Nest Deploy"
+      },
+      {
+        "command": "nester.kickci",
+        "title": "Nest Kick Ci"
+      },
+      {
+        "command": "nester.kickcd",
+        "title": "Nest Kick Cd"
+      },
+      {
+        "command": "nester.restore",
+        "title": "Nest Restore"
+      },
+      {
+        "command": "nester.coreclrdown",
+        "title": "Nest CoreCLR Down"
+      },
+      {
+        "command": "nester.scaffoldup",
+        "title": "Nest Scaffold Up"
+      },
+      {
+        "command": "nester.scaffolddown",
+        "title": "Nest Scaffold Down"
+      },
+      {
+        "command": "nester.help",
+        "title": "Nest Help"
       }
     ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node ./node_modules/vscode/bin/test",
+    "postinstall": "node ./node_modules/vscode/bin/install"
+  },
+  "devDependencies": {
+    "@types/mocha": "^2.2.48",
+    "@types/node": "^7.10.2",
+    "typescript": "^2.9.2",
+    "vscode": "^1.1.28"
   }
 }

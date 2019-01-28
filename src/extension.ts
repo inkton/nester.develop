@@ -11,12 +11,14 @@ var execPromise = require('child-process-promise').exec,
     spawn = require('child_process').spawn,
     yaml = require('yamljs'),
     fs = require("fs"),
+    hidefile = require("hidefile"),
     xml2js = require('xml2js'),
     Q = require('q'),
     accents = require('remove-accents'),
     path = require('path'),
     streamZip = require('node-stream-zip'),
-    encodeUrl = require('encodeurl');
+    encodeUrl = require('encodeurl'),
+    git = require('simple-git');
 
 class DeferredResult {
     subject: any;
@@ -115,15 +117,6 @@ function isNestProject(folder) : Boolean {
     }
 }
 
-function hasScaffold(folder) : Boolean {
-    try
-    {
-        return fs.existsSync(path.resolve(folder, 'settings.json'));
-    } catch (e) {
-        return false;
-    }
-}
-
 function devkit(folder) : string {
     var files = fs.readdirSync(folder)
         .filter(fn => fn.endsWith('.devkit'));
@@ -144,6 +137,10 @@ function getRootFolder(showAlert = true) : string {
         if (devkit(workspace.rootPath) !== null)
         {
             return workspace.rootPath;
+        }
+        else if (devkit(path.resolve(workspace.rootPath, '..', '..')) !== null )
+        {
+            return path.resolve(workspace.rootPath, '..', '..');
         }
         else if (isNestProject(workspace.rootPath))
         {
@@ -251,6 +248,8 @@ function discoverNestSettings(progressMarker) : any
 
 function saveNestSettings(rootFolder, nestSettings, progressMarker) : any 
 {
+    let deferred = Q.defer();
+
     progressStep("Saving settings ... ", progressMarker);
 
     fs.writeFile(path.resolve(rootFolder, 'settings.json'),
@@ -258,10 +257,16 @@ function saveNestSettings(rootFolder, nestSettings, progressMarker) : any
 
         if (error !== null) {
             progressStepFail('settings.json save failed', progressMarker);
+            deferred.reject(nestSettings);
             return;
         }
-    });        
+
+        deferred.resolve(nestSettings);
+    });
+
+    return deferred.promise;
 }
+
 
 /**
  * get nest settings
@@ -389,6 +394,8 @@ function createNestAssets(nestProject, launchConfig, progressMarker) : any
         fs.writeFile(path.resolve(nestHost, 'nest.json'),
             JSON.stringify(nestProject, null, 2), 'utf-8', function(error) {
 
+            // this can carry on writing a file on its own
+
             if (error !== null) {
                 progressStepFail('nest.json create failed', progressMarker);
                 deferred.reject(nestProject);
@@ -466,11 +473,11 @@ function createNestAssets(nestProject, launchConfig, progressMarker) : any
                     deferred.reject(nestProject);
                     return;
                 }
-    
-                progressStep("Emitting " + nestHost + '/.vscode/launch.json', progressMarker);
+                           
+                var debugPath = 'bin/Debug/' + result.Project.PropertyGroup[0]
+                    .TargetFramework[0] + '/' + nestTagCap + '.dll';
 
-                launchConfig['configurations'][0]['program'] +=  'bin/Debug/' +
-                    result.Project.PropertyGroup[0].TargetFramework[0] + '/' + nestTagCap + '.dll';
+                launchConfig['configurations'][0]['program'] += debugPath;
                 launchConfig['configurations'][0]['pipeTransport'].pipeArgs = [
                         "exec -i " + nestProject.container_name 
                     ];
@@ -479,6 +486,9 @@ function createNestAssets(nestProject, launchConfig, progressMarker) : any
                         "exec -i " + nestProject.container_name 
                     ];
 
+                var launchJsonPath = path.resolve(path.resolve(nestHost, ".vscode"), "launch.json");
+                progressStep("Emitting " + launchJsonPath, progressMarker);
+    
                 fs.writeFile(nestHost + '/.vscode/launch.json',
                     JSON.stringify(launchConfig, null, 2), 'utf-8', function(error) {
                     if (error !== null) {
@@ -504,6 +514,9 @@ function createNestProject(nestProject, progressMarker) : any
     progressStep("Attaching " + nestProject.container_name + " ...", progressMarker);
     var launchConfig = null;
     let deferred = Q.defer();
+
+    var nestSourcePath = path.resolve(nestProject.environment['NEST_FOLDER_ROOT'], 'source');
+    var nestHost = path.resolve(nestSourcePath, nestProject.environment['NEST_TAG_CAP']);
 
     if (nestProject.environment['NEST_PLATFORM_TAG'] === 'worker')
     {
@@ -555,25 +568,35 @@ function createNestProject(nestProject, progressMarker) : any
             ]
         };
 
-        launchConfig['configurations'][0].env = nestProject.environment;
-
         var value;
 
-        Object.keys(launchConfig['configurations'][0].env).forEach(function(key, index) {
-            if (!isNaN(launchConfig['configurations'][0].env[key]))
+        // strings with accents fail in the env
+        Object.keys(nestProject.environment).forEach(function(key, index) {
+            if (!isNaN(nestProject.environment[key]))
             {
-                value = launchConfig['configurations'][0].env[key].toString();
+                value = nestProject.environment[key].toString();
             }
             else
             {
-                value = accents.remove(launchConfig['configurations'][0].env[key].toString());
+                value = accents.remove(nestProject.environment[key].toString());
             }
-            launchConfig['configurations'][0].env[key] = value;
+            nestProject.environment[key] = value;
         });
+
+        launchConfig['configurations'][0].env = nestProject.environment;
+        launchConfig['configurations'][1].env = nestProject.environment;
 
         createNestAssets(nestProject, launchConfig, progressMarker)
             .then(function (result) {
-                deferred.resolve(nestProject);
+                integrateGit(nestHost, progressMarker)
+                .then(function () {                            
+                    // done!
+                    deferred.resolve(nestProject);                         
+                })
+                .catch(function (error) {
+                    progressStepFail(nestProject.container_name + ' <- Faied to integrateGit [' + error + ']', progressMarker);
+                    deferred.reject(nestProject);
+                });  
             })
             .catch(function (error) {
                 progressStepFail(error, progressMarker);
@@ -686,7 +709,22 @@ function createNestProject(nestProject, progressMarker) : any
 
             createNestAssets(nestProject, launchConfig, progressMarker)
                 .then(function (result) {
-                    deferred.resolve(nestProject);
+                    integrateGit(nestHost, progressMarker)
+                        .then(function () {                            
+                            integrateGit(path.resolve(nestSourcePath, "shared") , progressMarker)
+                            .then(function () {
+                                // done!
+                                deferred.resolve(nestProject);
+                            })
+                            .catch(function (error) {
+                                progressStepFail('Faied to integrateGit the shared folder [' + error + ']', progressMarker);
+                                deferred.reject(nestProject);
+                            });                         
+                        })
+                        .catch(function (error) {
+                            progressStepFail(nestProject.container_name + ' <- Faied to integrateGit [' + error + ']', progressMarker);
+                            deferred.reject(nestProject);
+                        });                         
                 })
                 .catch(function (error) {
                     progressStepFail(error, progressMarker);
@@ -764,8 +802,8 @@ function sendKickCdCommand(nestSettings, progressMarker, cause) : any
 /**
  * do the debug
  */
-function debug(debuggerPath) : any  {
-    
+function debug(context) : any  {
+    let debuggerPath = path.resolve(context.extensionPath, "debugger");
     let adapter = path.resolve(debuggerPath, "vsdbg-ui");
 
     if (os.platform() === 'win32') {
@@ -968,7 +1006,7 @@ function select() : any {
         return;
     }
 
-    var nests = [];
+    var nests = ['shared'];
 
     Object.keys(nestSettings['byKey']).forEach(function(key, index) {
         if (nestSettings['byKey'][key].environment['NEST_TAG'])
@@ -981,15 +1019,31 @@ function select() : any {
         .then(selected => {
             if (selected)
             {
-                var proj = nestSettings['byKey'][selected];
-                if (proj) {
-                    const rootFolder = getRootFolder();
-                    let uri = vscode.Uri.parse("file://" + rootFolder + '/source/' + proj.environment['NEST_TAG_CAP']);
-                    vscode.commands.executeCommand('vscode.openFolder', uri);
+                var target = null;
+
+                if (selected !== 'shared')
+                {
+                    var proj = nestSettings['byKey'][selected];
+                    if (proj) {
+                        const rootFolder = getRootFolder();
+                        let uri = vscode.Uri.parse("file://" + rootFolder + '/source/' + proj.environment['NEST_TAG_CAP']);
+                        vscode.commands.executeCommand('vscode.openFolder', uri);
+                    }
+                    else
+                    {
+                        vscode.window.showErrorMessage('The source code does not exist. Ensure to scaffold first.');
+                    }    
                 }
                 else
                 {
-                    vscode.window.showErrorMessage('The source code does not exist. Ensure to scaffold first.');
+                    target = 'shared';
+                }
+                
+                if (target !== null)
+                {
+                    const rootFolder = getRootFolder();
+                    let uri = vscode.Uri.parse("file://" + rootFolder + '/source/' + target);
+                    vscode.commands.executeCommand('vscode.openFolder', uri);    
                 }
             }
             progressEnd(progressMarker);
@@ -1213,10 +1267,17 @@ function build() : any {
 
     runCommand(nestProject, ['deployment', 'build'], progressMarker)
         .then(function (value) {
+            
             sendKickCiCommand(nestSettings, progressMarker, "project " + 
-                nestProject.environment['NEST_TAG_CAP'] + " was built" );
-            progressEnd(progressMarker);
-            deferred.resolve(nestProject);
+                nestProject.environment['NEST_TAG_CAP'] + " was built" )
+                .then(function (value) {
+                    progressEnd(progressMarker);
+                    deferred.resolve(nestProject);                    
+                })
+                .catch(function (error) {
+                    progressStepFail(error, progressMarker);
+                    deferred.reject();
+                });        
         })
         .catch(function (error) {
             progressStepFail(error, progressMarker);
@@ -1249,8 +1310,6 @@ function unitTestCleanBuild() : any {
 
     runCommand(nestProject, ['deployment', 'clean_build_tests'], progressMarker)
         .then(function (value) {
-            sendKickCiCommand(nestSettings, progressMarker, "project unit tests " + 
-                nestProject.environment['NEST_TAG_CAP'] + " were debug built" );
             progressEnd(progressMarker);
             deferred.resolve(nestProject);
         })
@@ -1278,7 +1337,8 @@ function pull() : any {
     progressStep("*******************************************************************", progressMarker);
     progressStep("The pull command will download this project source code along with the shared", progressMarker);
     progressStep("source from the remote machine. All local project and shared source content will", progressMarker);
-    progressStep("be replaced.", progressMarker);
+    progressStep("be replaced. ", progressMarker);
+
     progressStep("********************************************************************", progressMarker);
     progressStep("Confirm above you want to proceed.", progressMarker);
 
@@ -1334,7 +1394,7 @@ function push() : any {
     progressStep("The content pushed to the remote can be observed by opening a", progressMarker);
     progressStep("SSH terminal. Instructions on how to SSH is found in the following link.", progressMarker);
     progressStep("https://github.com/inkton/nester.develop/wiki/SSH-to-Production", progressMarker);
-    progressStep("           ", progressMarker);
+    progressStep("          ", progressMarker);
     progressStep("********************************************************************", progressMarker);
     progressStep("Confirm above you want to proceed.", progressMarker);
 
@@ -1413,17 +1473,27 @@ function deploy() : any {
  */
 function kickCi() : any {
     var progressMarker = progressStart("kicking off a ci session");
+    let deferred = Q.defer();
 
     var nestSettings = getNestSettings();
     if (!nestSettings)
     {
         progressStepFail('No nest settings found', progressMarker);
+        deferred.resolve(); 
         return;
-    }
+    }    
 
-    sendKickCiCommand(nestSettings, progressMarker, "on request");
+    sendKickCiCommand(nestSettings, progressMarker, "on request")
+    .then(function (value) {
+        progressEnd(progressMarker);
+        deferred.resolve();                    
+    })
+    .catch(function (error) {
+        progressStepFail(error, progressMarker);
+        deferred.reject();
+    });
 
-    progressEnd(progressMarker);
+    return deferred.promise;   
 }
 
 /**
@@ -1431,17 +1501,27 @@ function kickCi() : any {
  */
 function kickCd() : any {
     var progressMarker = progressStart("kicking off a cd session");
+    let deferred = Q.defer();
 
     var nestSettings = getNestSettings();
     if (!nestSettings)
     {
         progressStepFail('No nest settings found', progressMarker);
+        deferred.resolve(); 
         return;
     }
 
-    sendKickCdCommand(nestSettings, progressMarker, "on request");
+    sendKickCdCommand(nestSettings, progressMarker, "on request")
+    .then(function (value) {
+        progressEnd(progressMarker);
+        deferred.resolve();                    
+    })
+    .catch(function (error) {
+        progressStepFail(error, progressMarker);
+        deferred.reject();
+    });
 
-    progressEnd(progressMarker);
+    return deferred.promise;
 }
 
 /**
@@ -1590,31 +1670,154 @@ function scaffoldService(key, nest, dockerMachineIP, progressMarker) : any
     return deferred.promise;
 }
 
+function setupGit(rootFolder, nestSettings, progressMarker)
+{
+    let deferred = Q.defer();
+    let result = new DeferredResult(null);
+            
+    const appNest = nestSettings['app'];
+    const appTag = appNest.environment['NEST_APP_TAG'];
+    const contactId = appNest.environment['NEST_CONTACT_ID'];
+
+    var treeKey = Buffer.from(appNest.environment['NEST_TREE_KEY'], 
+        'base64').toString('ascii').replace(/\\n/g, '\n');
+
+    fs.writeFile(path.resolve(rootFolder, 'tree_key'),
+        treeKey, 'utf-8', function(error) {
+
+        if (error !== null) {
+            progressStepFail('.tree_key save failed', progressMarker);
+            deferred.reject(result);
+            return;
+        }
+
+        hidefile.hide(path.resolve(rootFolder, 'tree_key'));
+        var contactKey = Buffer.from(appNest.environment['NEST_CONTACT_KEY'], 
+            'base64').toString('ascii').replace(/\\n/g, '\n');
+
+        fs.writeFile(path.resolve(rootFolder, 'contact_key'),
+            contactKey, 'utf-8', function(error) {
+
+            if (error !== null) {
+                progressStepFail('.contact_key save failed', progressMarker);
+                deferred.reject(result);
+                return;
+            }
+            
+            hidefile.hide(path.resolve(rootFolder, 'contact_key'));
+            fs.chmod(path.resolve(rootFolder, '.contact_key'), '0700');
+
+            var treeKeyPath = path.resolve(rootFolder, '.tree_key');
+            var contactKeyPath = path.resolve(rootFolder, '.contact_key');
+
+            fs.writeFile(path.resolve(rootFolder, 'ssh_config'),
+`Host nest
+    HostName ${appTag}.nestapp.yt
+    User ${contactId}
+    UserKnownHostsFile ${treeKeyPath}
+    IdentityFile ${contactKeyPath}`, 'utf-8', function(error) {
+
+                if (error !== null) {
+                    progressStepFail('Failed to create ' + path.resolve(rootFolder, '.ssh_config'), progressMarker);
+                    deferred.reject(result);              
+                    return;
+                }
+
+                hidefile.hide(path.resolve(rootFolder, 'ssh_config'));
+
+                // done!
+                result.success = true;
+                deferred.resolve(result);                
+            });
+        }); 
+    }); 
+
+    return deferred.promise;
+}
+
+function integrateGit(gitFolder, progressMarker)
+{
+    let deferred = Q.defer();
+    let result = new DeferredResult(null);
+
+    const rootFolder = getRootFolder();
+    if (!rootFolder)
+    {
+        deferred.reject();
+        return;
+    }
+
+    var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
+    var gitInit = `git config --local core.sshCommand 'ssh -F ${gitConfigPath}' && git config --local core.fileMode false`.replace(/\\/g,"/");
+
+    exec(gitInit, { 'cwd' : gitFolder},
+        (error, stdout, stderr) => {
+
+        if (stdout !== null)
+        {
+            progressStep(stdout, progressMarker);
+        }
+
+        if (error !== null) {
+            progressStepFail(stderr, progressMarker);
+            deferred.reject(result);
+            return;
+        }
+
+        deferred.resolve(result);
+    });
+
+    return deferred.promise;
+}
+
 /**
  * up the scaffold
  */
 function scaffoldUp() : any 
 {
+    var progressMarker = progressStart("scaffold up");
+    let deferred = Q.defer();
+
+    execPromise('git --version')
+    .then(function (result) {
+        var stdout = result.stdout;
+        var thenum = stdout.replace( /^\D+/g, '').split(".");
+        // local ssh support is needed with git v2.10 
+        if (parseInt(thenum[0], 10) <= 2)
+        {
+            if (parseInt(thenum[1], 10) <= 10)
+            {
+                showError("Please install Git vesion 2.10 or greater");
+                deferred.reject();
+                return;
+            }                        
+        }        
+    })
+    .catch(function (exception) {
+        deferred.reject();
+        showError("Failed to check if Git is installed");
+    })   
+
     const rootFolder = getRootFolder();
     if (!rootFolder)
     {
+        deferred.reject();
         return;
     }
 
     if (getNestProject(false) !== null)
     {
         vscode.window.showErrorMessage('Run the scaffold command from the root folder.');
+        deferred.reject();
         return;
     }
 
     if (fs.existsSync(path.resolve(rootFolder, 'source')))
     {
         vscode.window.showErrorMessage('A scaffold already exist. Down the scafold before proceeding.');
+        deferred.reject();
         return;
     }
-
-    var progressMarker = progressStart("scaffold up");
-    let deferred = Q.defer();
 
     var nestSettings = discoverNestSettings(progressMarker);
     if (!nestSettings)
@@ -1661,7 +1864,6 @@ function scaffoldUp() : any
             }
 
             var services = [];
-
             Object.keys(nestSettings['byKey']).forEach(function(key, index) {                    
 
                 if (nestSettings['byKey'][key].environment['NEST_TAG'])
@@ -1680,35 +1882,33 @@ function scaffoldUp() : any
 
                 results.forEach(function (result) {
                     if (result.state !== "fulfilled") {
-                        progressStepFail("The scaffold for " + 
-                            result.value.subject.environment['NEST_TAG'] + " failed", progressMarker);
+
+                        if (result.value.subject.environment['NEST_TAG'])
+                        {
+                            progressStepFail("The scaffoldding of " + 
+                                result.value.subject.environment['NEST_TAG'] + " failed", progressMarker);
+                        }
+                        else
+                        {
+                            progressStepFail("The scaffoldding of" + 
+                                result.value.subject.environment['NEST_APP_SERVICE'] + " failed", progressMarker);
+                        }
+
                         deferred.reject(nestSettings);
                         return;                            
-                    }
+                    }                           
                 });                
-                
-                progressStep("Setting shared area upstream.", progressMarker);
 
-                var gitInit = `git config --local core.sshCommand "ssh -F ${rootFolder}/.ssh_config" && git config --local core.fileMode false`.replace(/\\/g,"/");
-                var sharedFolder = rootFolder + "/source/shared";
-
-                exec(gitInit, { 'cwd' : sharedFolder},
-                    (error, stdout, stderr) => {
-
-                    if (stdout !== null)
-                    {
-                        progressStep(stdout, progressMarker);
-                    }
-
-                    if (error !== null) {
-                        progressStepFail(stderr, progressMarker);
-                        deferred.reject(nestSettings);
-                        return;
-                    }
-
+                setupGit(rootFolder, nestSettings, progressMarker)
+                .then(function () {
                     saveNestSettings(rootFolder, nestSettings, progressMarker);
                     progressEnd(progressMarker);
-                    deferred.resolve(nestSettings);
+                    deferred.resolve(nestSettings);              
+                })
+                .catch(function (error) {
+                    progressStepFail("Failed to setup Git", progressMarker);
+                    deferred.reject();
+                    return;
                 });
             });
         });
@@ -1852,6 +2052,7 @@ function help() : any {
         Nest Reset, rebuilds the running services.
         Nest Pull, to pull from production.
         Nest Push, to push in production.
+        Nest Checkout, to checkout source from a Git branch.
         Nest Deploy, to build and deploy production.
         Nest Kill, to kill the in-container run-time.
         Nest Data Up, to upload data to production.
@@ -1859,7 +2060,7 @@ function help() : any {
         Nest View Data, to view test data.
         Nest View Queue, to view test queue.
         Nest View Ci/Cd, to view continous integration/deployment.
-        Nest Kick Ci, to kick-off a new CI session.
+        Nest Kick Ci, to kick-off a new Ci session.
         Nest Kick Cd, to kick-off a new Cd session.
         Nest CoreCLR Down, to download the CoreCLR debuger.
         
@@ -1961,6 +2162,146 @@ function installCoreClrDebugger(context, debuggerPath) : any {
     return deferred.promise;
 }
 
+/**
+ * check the debugger
+ */
+function checkDebugger(context) : any {
+    let debuggerPath = path.resolve(context.extensionPath, "debugger");
+
+    if (!fs.existsSync(debuggerPath)) {
+        installCoreClrDebugger(context, debuggerPath);
+    }
+}
+
+/**
+ * force download the debugger
+ */
+function forceDownloadDebugger(context) : any {
+    let debuggerPath = path.resolve(context.extensionPath, "debugger");
+
+    if (fs.existsSync(debuggerPath)) {
+        // delete the folder if alredy exist and re-download
+        deleteFolderRecursive(debuggerPath);
+    }
+
+    installCoreClrDebugger(context, debuggerPath);
+}
+
+/**
+ * offer git checkout
+ */
+function offerGitCheckout(isStarting) : any {
+    const workspace = vscode.workspace;
+    
+    function doShared(thisSharedPath)
+    {
+        git(thisSharedPath).branch(function (err, branchSummary) {
+            var doCheckout = false;
+
+            if (isStarting)
+            {
+                if (branchSummary.current === "")
+                {
+                    doCheckout = true;
+                }    
+            }
+            else
+            {
+                if (branchSummary.current !== "")
+                {
+                    showError("The branch " + branchSummary.current + " has been checked out already!");
+                }
+                else
+                {
+                    doCheckout = true;
+                }
+            }
+
+            if (doCheckout)
+            {
+                let sharedPick = ['None'];
+
+                Object.keys(branchSummary.all).forEach(function(branch, index) {
+                    if (branchSummary.all[branch].search('shared') > 0)
+                    {
+                        sharedPick.push(branchSummary.all[branch]);
+                    }
+                });
+                
+                vscode.window.showQuickPick(sharedPick, { placeHolder: 'Checkout Shared?' }).then((branch) => {
+                    if (branch && branch !== 'None') {                                                    
+                        git(thisSharedPath).checkout([branch, '--track', '--force']);
+                    }
+                });                            
+            }    
+        });        
+    }
+
+    if (path.basename(workspace.rootPath) === 'shared')
+    {
+        doShared(workspace.rootPath);
+    }
+    else
+    {
+        git(workspace.rootPath).branch(function (err, branchSummary) {
+            var doCheckout = false;
+            if (isStarting)
+            {
+                if (branchSummary.current === "")
+                {
+                    doCheckout = true;
+                }    
+            }
+            else
+            {
+                if (branchSummary.current !== "")
+                {
+                    showError("The branch " + branchSummary.current + " has been checked out already!");
+                }
+                else
+                {
+                    doCheckout = true;
+                }
+            }
+
+            if (doCheckout)
+            {
+                const nestProject = getNestProject();
+                if (nestProject === null)
+                {
+                    return false;
+                }
+                
+                let projectPick = ['None'];
+    
+                Object.keys(branchSummary.all).forEach(function(branch, index) {
+                    if (branchSummary.all[branch].search(nestProject.environment['NEST_TAG']) > 0)
+                    {
+                        projectPick.push(branchSummary.all[branch]);
+                    } 
+                });
+    
+                vscode.window.showQuickPick(projectPick, { placeHolder: 'Checkout?' }).then((branch) => {
+                    if (branch && branch !== 'None') {
+                        git(workspace.rootPath).checkout([branch, '--track', '--force']);
+    
+                        const rootFolder = getRootFolder();
+                        if (!rootFolder)
+                        {
+                            return;
+                        }
+    
+                        var thisSharedPath = path.resolve(rootFolder, 'source');
+                        thisSharedPath = path.resolve(thisSharedPath, 'shared');
+                        
+                        doShared(thisSharedPath);
+                    }
+                });                         
+            }               
+        });
+    }
+}
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -1971,14 +2312,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     try {
         createNotifiers();
-
-        let debuggerPath = path.resolve(context.extensionPath, "debugger");
-
-        if (!fs.existsSync(debuggerPath)) {
-            installCoreClrDebugger(context, debuggerPath);
-        }
+        checkDebugger(context);
+        offerGitCheckout(true);
         
-        let debugDisposable = vscode.commands.registerCommand('nester.debug', () => { return debug(debuggerPath); });
+        let debugDisposable = vscode.commands.registerCommand('nester.debug', () => { return debug(context); });
 
         let dataUpDisposable = vscode.commands.registerCommand('nester.dataup', () => { return showProgress(dataUp); });
         let dataDownDisposable = vscode.commands.registerCommand('nester.datadown', () => { return showProgress(dataDown); });
@@ -1989,11 +2326,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         let pushDisposable = vscode.commands.registerCommand('nester.push', () => { return showProgress(push); });
         let pullDisposable = vscode.commands.registerCommand('nester.pull', () => { return showProgress(pull); });
-
+        
         let deployDisposable = vscode.commands.registerCommand('nester.deploy', () => { return showProgress(deploy); });
 
-        let kickciDisposable = vscode.commands.registerCommand('nester.kickci', () => kickCi( ) );
-        let kickcdDisposable = vscode.commands.registerCommand('nester.kickcd', () => kickCd( ) );
+        let kickciDisposable = vscode.commands.registerCommand('nester.kickci', () => { return showProgress(kickCi); });
+        let kickcdDisposable = vscode.commands.registerCommand('nester.kickcd', () => { return showProgress(kickCd); });
 
         let selectDisposable = vscode.commands.registerCommand('nester.select', () => select( ) );
         let cleanDisposable = vscode.commands.registerCommand('nester.clean', () => { return showProgress(clean); });
@@ -2007,17 +2344,9 @@ export function activate(context: vscode.ExtensionContext) {
         let scaffoldUpDisposable = vscode.commands.registerCommand('nester.scaffoldup', () => { return showProgress(scaffoldUp); });
         let scaffoldDownDisposable = vscode.commands.registerCommand('nester.scaffolddown', () => { return showProgress(scaffoldDown); });
         let unittestprocidDisposable = vscode.commands.registerCommand('nester.unittestprocid', () => { return unitTestDebugHost(); });
+        let coreclrdownDisposable = vscode.commands.registerCommand('nester.coreclrdown', () => { return forceDownloadDebugger(context); });
+        let checkoutisposable = vscode.commands.registerCommand('nester.checkout', () => { return offerGitCheckout(false); });        
 
-        let coreclrdownDisposable = vscode.commands.registerCommand('nester.coreclrdown', () => 
-        {
-            if (fs.existsSync(debuggerPath)) {
-                // delete the folder if alredy exist and re-download
-                deleteFolderRecursive(debuggerPath);
-            }
-
-            installCoreClrDebugger(context, debuggerPath);
-        });
-        
         context.subscriptions.push(debugDisposable);
         context.subscriptions.push(dataUpDisposable);
         context.subscriptions.push(dataDownDisposable);
@@ -2042,6 +2371,7 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(coreclrdownDisposable);
         context.subscriptions.push(helpDisposable);
         context.subscriptions.push(unittestprocidDisposable);        
+        context.subscriptions.push(checkoutisposable);        
 
     } catch( exception ) {
         showError("Sorry, something went wrong with Nest services", exception);
