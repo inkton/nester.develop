@@ -257,16 +257,31 @@ function saveNestSettings(rootFolder, nestSettings, progressMarker) : any
 
         if (error !== null) {
             progressStepFail('settings.json save failed', progressMarker);
-            deferred.reject(nestSettings);
-            return;
+            deferred.reject(nestSettings);            
         }
-
-        deferred.resolve(nestSettings);
+        else
+        {
+            deferred.resolve(nestSettings);
+        }
     });
 
     return deferred.promise;
 }
 
+/**
+ * is installed
+ */
+function isInstalled() : any {
+    const rootFolder = getRootFolder();
+
+    if (rootFolder !== null)
+    {
+        return fs.existsSync(
+            path.resolve(rootFolder, 'settings.json'));
+    }
+
+    return false;
+}
 
 /**
  * get nest settings
@@ -822,19 +837,22 @@ function debug(context) : any  {
  */
 function dataUp() : any 
 {    
+    let deferred = Q.defer();
+    var progressMarker = progressStart("data upload");
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
 
     if (getNestService("storage") === null)
     {
+        deferred.reject();
         showError('A storage service has not been configured for this app.');
+        return deferred.promise;
     }
-
-    let deferred = Q.defer();
-    var progressMarker = progressStart("data upload");
 
     runCommand(nestProject, ['data', 'push'], progressMarker)
         .then(function (value) {
@@ -854,19 +872,22 @@ function dataUp() : any
  */
 function dataDown() : any 
 {
+    let deferred = Q.defer();
+    var progressMarker = progressStart("data download");
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
  
     if (getNestService("storage") === null)
     {
+        deferred.reject();
         showError('A storage service has not been configured for this app.');
+        return deferred.promise;
     }
-
-    let deferred = Q.defer();
-    var progressMarker = progressStart("data download");
 
     let quickPick = ['yes', 'no'];
     vscode.window.showQuickPick(quickPick, { placeHolder: 'Replace local Database from production?' }).then((val) => {
@@ -1025,9 +1046,7 @@ function select() : any {
                 {
                     var proj = nestSettings['byKey'][selected];
                     if (proj) {
-                        const rootFolder = getRootFolder();
-                        let uri = vscode.Uri.parse("file://" + rootFolder + '/source/' + proj.environment['NEST_TAG_CAP']);
-                        vscode.commands.executeCommand('vscode.openFolder', uri);
+                        target = proj.environment['NEST_TAG_CAP'];
                     }
                     else
                     {
@@ -1041,9 +1060,10 @@ function select() : any {
                 
                 if (target !== null)
                 {
-                    const rootFolder = getRootFolder();
-                    let uri = vscode.Uri.parse("file://" + rootFolder + '/source/' + target);
-                    vscode.commands.executeCommand('vscode.openFolder', uri);    
+                    var folder = path.resolve( getRootFolder(), 'source');
+                    folder = path.resolve(folder, target);
+                    let uri = vscode.Uri.parse(folder);
+                    vscode.commands.executeCommand('vscode.openFolder', uri);
                 }
             }
             progressEnd(progressMarker);
@@ -1054,14 +1074,15 @@ function select() : any {
  * up the clear
  */
 function clear() : any {
+    let deferred = Q.defer();
+    var progressMarker = progressStart("clear");
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
-
-    let deferred = Q.defer();
-    var progressMarker = progressStart("clear");
 
     runCommand(nestProject, ['deployment', 'clear'], progressMarker)
         .then(function (value) {
@@ -1107,21 +1128,22 @@ function clean() : any {
  */
 function reset() : any
 {
+    let deferred = Q.defer();
+    var progressMarker = progressStart("reset");
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
-
-    let deferred = Q.defer();
-    var progressMarker = progressStart("reset");
 
     var nestSettings = getNestSettings();
     if (!nestSettings)
     {
         progressStepFail('No nest settings found', progressMarker);
         deferred.reject();
-        return;
+        return deferred.promise;
     }
 
     const rootFolder = getRootFolder();
@@ -1154,6 +1176,14 @@ function reset() : any
                 return;
             }
 
+            if(stdout.indexOf('error while creating mount source path') > -1 ||
+                stderr.indexOf('error while creating mount source path') > -1 )
+            {
+                progressStepFail("Enable shared drives in Docker settings", progressMarker);
+                deferred.reject(nestProject);
+                return;
+            }
+            
             if (stdout !== null)
             {
                 progressStep(stdout, progressMarker);
@@ -1222,14 +1252,15 @@ function kill() : any {
  * up the build
  */
 function restore() : any {
+    let deferred = Q.defer();
+    var progressMarker = progressStart("restore");
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
-
-    let deferred = Q.defer();
-    var progressMarker = progressStart("restore");
 
     runCommand(nestProject, ['deployment', 'restore'], progressMarker)
         .then(function (value) {
@@ -1248,14 +1279,15 @@ function restore() : any {
  * up the build
  */
 function build() : any {
+    var progressMarker = progressStart("building");
+    let deferred = Q.defer();
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
-
-    var progressMarker = progressStart("building");
-    let deferred = Q.defer();
 
     var nestSettings = getNestSettings();
     if (!nestSettings)
@@ -1325,14 +1357,15 @@ function unitTestCleanBuild() : any {
  * pull the nest
  */
 function pull() : any {
+    let deferred = Q.defer();
+    var progressMarker = progressStart("pull content");
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
-
-    let deferred = Q.defer();
-    var progressMarker = progressStart("pull content");
 
     progressStep("*******************************************************************", progressMarker);
     progressStep("The pull command will download this project source code along with the shared", progressMarker);
@@ -1348,19 +1381,9 @@ function pull() : any {
             if (val === 'yes')
             {
                 runCommand(nestProject, ['deployment', 'pull'], progressMarker)
-                .then(function (value) {
-
-                    progressStep("Re-create project ...", progressMarker);
-
-                    createNestProject(nestProject, progressMarker)
-                        .then(function (value) {
-                            progressEnd(progressMarker);
-                            deferred.resolve(nestProject);
-                        })
-                        .catch(function (error) {
-                            progressStepFail(error, progressMarker);
-                            deferred.reject();
-                        });
+                .then(function (value) {                    
+                    progressEnd(progressMarker);
+                    deferred.resolve(nestProject);
                 })
                 .catch(function (error) {                    
                     progressStepFail(error, progressMarker);
@@ -1380,14 +1403,15 @@ function pull() : any {
  * up the push
  */
 function push() : any {
+    var progressMarker = progressStart("push");
+    let deferred = Q.defer();
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
+        deferred.reject();
         return false;
     }
-
-    var progressMarker = progressStart("push");
-    let deferred = Q.defer();
 
     progressStep("*******************************************************************", progressMarker);
     progressStep("This command will upload the project along with the shared source.", progressMarker);
@@ -1427,14 +1451,15 @@ function push() : any {
  * up the deploy
  */
 function deploy() : any {
+    var progressMarker = progressStart("deploy");
+    let deferred = Q.defer();
+
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
-
-    var progressMarker = progressStart("deploy");
-    let deferred = Q.defer();
 
     progressStep("*******************************************************************", progressMarker);
     progressStep("This command will restore, release build and restart the", progressMarker);
@@ -1479,8 +1504,8 @@ function kickCi() : any {
     if (!nestSettings)
     {
         progressStepFail('No nest settings found', progressMarker);
-        deferred.resolve(); 
-        return;
+        deferred.reject();
+        return deferred.promise;
     }    
 
     sendKickCiCommand(nestSettings, progressMarker, "on request")
@@ -1507,8 +1532,8 @@ function kickCd() : any {
     if (!nestSettings)
     {
         progressStepFail('No nest settings found', progressMarker);
-        deferred.resolve(); 
-        return;
+        deferred.reject();
+        return deferred.promise;
     }
 
     sendKickCdCommand(nestSettings, progressMarker, "on request")
@@ -1744,11 +1769,11 @@ function integrateGit(gitFolder, progressMarker)
     if (!rootFolder)
     {
         deferred.reject();
-        return;
+        return deferred.promise;
     }
 
     var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
-    var gitInit = `git config --local core.sshCommand 'ssh -F ${gitConfigPath}' && git config --local core.fileMode false`.replace(/\\/g,"/");
+    var gitInit = `git config --local core.sshCommand "ssh -F ${gitConfigPath}" && git config --local core.fileMode false`.replace(/\\/g,"/");
 
     exec(gitInit, { 'cwd' : gitFolder},
         (error, stdout, stderr) => {
@@ -1789,20 +1814,20 @@ function scaffoldUp() : any
             {
                 showError("Please install Git vesion 2.10 or greater");
                 deferred.reject();
-                return;
+                return deferred.promise;
             }                        
         }        
     })
     .catch(function (exception) {
         deferred.reject();
         showError("Failed to check if Git is installed");
-    })   
+    });
 
     const rootFolder = getRootFolder();
     if (!rootFolder)
     {
         deferred.reject();
-        return;
+        return deferred.promise;
     }
 
     if (getNestProject(false) !== null)
@@ -1816,7 +1841,7 @@ function scaffoldUp() : any
     {
         vscode.window.showErrorMessage('A scaffold already exist. Down the scafold before proceeding.');
         deferred.reject();
-        return;
+        return deferred.promise;
     }
 
     var nestSettings = discoverNestSettings(progressMarker);
@@ -1824,7 +1849,7 @@ function scaffoldUp() : any
     {
         progressStepFail('No nest settings found', progressMarker);
         deferred.reject();
-        return;
+        return deferred.promise;
     }
         
     exec('docker-machine ip',
@@ -1922,28 +1947,31 @@ function scaffoldUp() : any
  */
 function scaffoldDown() : any 
 {
+    var progressMarker = progressStart("scaffold down");
+    let deferred = Q.defer();
+
     const rootFolder = getRootFolder();
     if (!rootFolder)
     {
-        return;
+        deferred.reject();
+        return deferred.promise;    
     }
 
     if (getNestProject(false) !== null)
     {
         vscode.window.showErrorMessage('Run the scaffold command from the root folder.');
-        return;
+        deferred.reject();
+        return deferred.promise;    
     }
-
-    var progressMarker = progressStart("scaffold down");
-    let deferred = Q.defer();
 
     let quickPick = ['yes', 'no'];
        vscode.window.showQuickPick(quickPick, { placeHolder: 'Remove all local assets of this project?' }).then((val) => {
         if (val) {
             if (val === 'yes')
             {
+                progressStep("Working ...", progressMarker);                
                 var theDevkit = devkit(rootFolder);
-                            
+                                           
                 exec('docker-compose --file '+ theDevkit +' down', { 'cwd' : rootFolder },
                     (error, stdout, stderr) => {
                         
@@ -1978,7 +2006,8 @@ function scaffoldDown() : any
                             progressStep("Removed " + name, progressMarker);
                         }
     
-                    } catch (e) {
+                    } catch (exception) {
+                        progressStep(exception.toString(), progressMarker);
                     }
 
                     progressEnd(progressMarker);
@@ -2003,7 +2032,8 @@ function unitTestDebugHost() : any {
     const nestProject = getNestProject();
     if (nestProject === null)
     {
-        return false;
+        deferred.reject();
+        return deferred.promise;
     }
     
     exec('docker exec -t ' + nestProject.container_name + 
@@ -2191,6 +2221,13 @@ function forceDownloadDebugger(context) : any {
  * offer git checkout
  */
 function offerGitCheckout(isStarting) : any {
+
+    if (!isInstalled())
+    {
+        // not yet installed
+        return;
+    }
+
     const workspace = vscode.workspace;
     
     function doShared(thisSharedPath)
@@ -2207,14 +2244,7 @@ function offerGitCheckout(isStarting) : any {
             }
             else
             {
-                if (branchSummary.current !== "")
-                {
-                    showError("The branch " + branchSummary.current + " has been checked out already!");
-                }
-                else
-                {
-                    doCheckout = true;
-                }
+                doCheckout = true;
             }
 
             if (doCheckout)
@@ -2254,21 +2284,14 @@ function offerGitCheckout(isStarting) : any {
             }
             else
             {
-                if (branchSummary.current !== "")
-                {
-                    showError("The branch " + branchSummary.current + " has been checked out already!");
-                }
-                else
-                {
-                    doCheckout = true;
-                }
+                doCheckout = true;
             }
 
             if (doCheckout)
             {
                 const nestProject = getNestProject();
                 if (nestProject === null)
-                {
+                {       
                     return false;
                 }
                 
@@ -2294,7 +2317,11 @@ function offerGitCheckout(isStarting) : any {
                         var thisSharedPath = path.resolve(rootFolder, 'source');
                         thisSharedPath = path.resolve(thisSharedPath, 'shared');
                         
-                        doShared(thisSharedPath);
+                        if (isStarting)
+                        {
+                            // if first time set shared too ..
+                            doShared(thisSharedPath);
+                        }
                     }
                 });                         
             }               
