@@ -2,7 +2,7 @@
   "name": "nester-develop",
   "displayName": "Nester Develop",
   "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "publisher": "inkton",
   "icon": "images/nester-develop.png",
   "engines": {

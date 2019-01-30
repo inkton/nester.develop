@@ -76,4 +76,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - The user is able to select the shared folder from the select menu
 - The SSH certs now properly created for Git push/pull over SSH
 
+## [1.5.6] - 2019-01-30
+### Changed
+- Fixed checkout check only after install
+- Fixed select option not working on Windows
+- Fixed Git ability to checkout multiple time 
 
