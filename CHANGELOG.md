@@ -82,3 +82,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Fixed select option not working on Windows
 - Fixed Git ability to checkout multiple time 
 
+## [1.5.7] - 2019-02-30
+### Changed
+- Fix for chmod command on Windows throwing an error. 
+- Fixed path with spaces requiring double quotes when docker-compose cli
+- Few structural changes and cleanups
+
