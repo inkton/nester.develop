@@ -157,6 +157,61 @@ function getRootFolder(showAlert = true) : string {
     return null;
 }
 
+function getSourceFolder(showAlert = true) : string {
+    const rootFolder = getRootFolder(showAlert);
+    if (!rootFolder)
+    {
+        return;
+    }   
+    return path.resolve(rootFolder, 'source');
+}
+
+function getSharedFolder(showAlert = true) : string {
+    var thisSharedPath = getSourceFolder(showAlert);
+    return path.resolve(thisSharedPath, 'shared');
+}
+
+function getGitFolderBranches(folder) : any {
+    let deferred = Q.defer();
+    const sharedFolder = getSharedFolder(false);
+    const branchPrefix = "remotes/origin/" + folder.trim().toLowerCase() + "-";
+
+    let branchPick = [];
+
+    git(sharedFolder).branch(function (err, branchSummary) {
+        Object.keys(branchSummary.all).forEach(function(branch, index) {
+
+            if (branchSummary.all[branch].startsWith(branchPrefix))
+            {
+                branchPick.push(branchSummary.all[branch]);
+            }
+        });
+        
+        deferred.resolve(branchPick);        
+    });  
+
+    return deferred.promise;    
+}
+
+function ensureSshPermissions(rootFolder) : any {
+
+    /* 
+    the .contact_key is permissions keep 
+    needs to be set such that it has adequate
+    permissions.  
+    */
+
+    try
+    {
+        fs.chmodSync(path.resolve(rootFolder, '.contact_key'), 0o600);
+    }
+    catch(e)
+    {
+        // Throws "ENOENT: no such file or directory" error on windows.
+        //progressStep("Chmod " + e, progressMarker);
+    }
+}
+
 /**
  * get nest project
  */
@@ -842,7 +897,7 @@ function debug(context) : any  {
     }
     else
     {
-        fs.chmodSync(adapter, '755');
+        fs.chmodSync(adapter, 0o755);
     }
     
     return {command: adapter};
@@ -1573,6 +1628,185 @@ function kickCd() : any {
 }
 
 /**
+ * up the folderCreate
+ */
+async function folderCreate() : Promise<void> {
+    let name = await vscode.window.showInputBox({
+        prompt: 'Enter folder name',
+        validateInput: (text: string): string | undefined => {                
+            if (!text || text.trim().indexOf(' ') !== -1) {
+                return 'The name cannot have spaces!';
+            } else {
+                return undefined;
+            }
+        }
+    });
+    
+    var progressMarker = progressStart("creating a nest folder");
+    let deferred = Q.defer();
+    
+    var nestSettings = getNestSettings();
+    if (!nestSettings)
+    {
+        progressStepFail('No nest settings found', progressMarker);
+        deferred.reject();
+        return deferred.promise;
+    }
+
+    if (name && name.length > 0)
+    {
+        const rootFolder = getRootFolder(false);
+        ensureSshPermissions(rootFolder);
+
+        getGitFolderBranches(name)
+        .then(function (branchPick) {
+            if (branchPick.length > 0)
+            {
+                vscode.window.showErrorMessage('The folder already exists.');
+            }
+            else
+            {
+                const folderPath = getSourceFolder(false) + "/" + name;
+                fs.mkdir(folderPath, { recursive: true }, (err) => {
+                    if (err) {
+                        throw err;
+                    }
+                    git(folderPath).init(function() {
+                        var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
+                        const appNest = nestSettings['app'];
+    
+                        git(folderPath)
+                            .addConfig('user.name', appNest.environment['NEST_CONTACT_ID'])
+                            .addConfig('user.email', appNest.environment['NEST_CONTACT_EMAIL'])
+                            .addConfig('core.fileMode', false)
+                            .addConfig("core.sshcommand", "ssh -F " + gitConfigPath,
+                            function() {              
+                                git(folderPath).addRemote("origin", "nest:repository.git", function() {
+                                    git(folderPath).fetch(function() {
+                                        const newBranch = name.trim().toLowerCase() + "-master";                                    
+                                        git(folderPath).checkoutLocalBranch(newBranch);
+                                        progressStep(newBranch + " checked out in " + folderPath, progressMarker);
+                                        progressEnd(progressMarker);
+                                        deferred.resolve();                            
+                                    });
+                                });
+                            }
+                        );
+                    });
+                });
+            }
+
+            progressEnd(progressMarker);
+            deferred.resolve();                    
+        })
+        .catch(function (error) {
+            progressStepFail('No matching git hives found', progressMarker);
+            progressStepFail(error, progressMarker);
+            deferred.reject();
+        });       
+    }
+
+    return deferred.promise;
+}
+
+/**
+ * up the folderCreate
+ */
+
+async function folderFetch() : Promise<void> {
+
+    let name = await vscode.window.showInputBox({
+        prompt: 'Enter folder name',
+        validateInput: (text: string): string | undefined => {                
+            if (!text || text.trim().indexOf(' ') !== -1) {
+                return 'The name cannot have spaces!';
+            } else {
+                return undefined;
+            }
+        }
+    });
+    
+    var progressMarker = progressStart("fetch an existing folder from the remote");
+    let deferred = Q.defer();
+    
+    var nestSettings = getNestSettings();
+    if (!nestSettings)
+    {
+        progressStepFail('No nest settings found', progressMarker);
+        deferred.reject();
+        return deferred.promise;
+    }
+
+    if (name && name.length > 0)
+    {
+        const rootFolder = getRootFolder(false);
+        ensureSshPermissions(rootFolder);
+
+        getGitFolderBranches(name)
+        .then(function (branchPick) {
+            if (branchPick.length === 0)
+            {
+                vscode.window.showErrorMessage('There are no folders with the name ' + name);
+            }
+            else
+            {
+                const folderPath = getSourceFolder(false) + "/" + name;
+                fs.mkdir(folderPath, { recursive: true }, (err) => {
+                    if (err) {
+                        throw err;
+                    }
+                    git(folderPath).init(function() {
+                        var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
+                        const appNest = nestSettings['app'];
+    
+                        git(folderPath)
+                            .addConfig('user.name', appNest.environment['NEST_CONTACT_ID'])
+                            .addConfig('user.email', appNest.environment['NEST_CONTACT_EMAIL'])
+                            .addConfig('core.fileMode', false)
+                            .addConfig("core.sshcommand", "ssh -F " + gitConfigPath,
+                            function() {              
+                                git(folderPath).addRemote("origin", "nest:repository.git", function() {
+                                    git(folderPath).fetch(function() {
+                                        if (branchPick.length === 1)
+                                        {
+                                            git(folderPath).checkout([branchPick[0], '--track', '--force']);
+                                            progressStep(branchPick[0] + " checked out in " + folderPath, progressMarker);                                            
+                                        }
+                                        else
+                                        {
+                                            vscode.window.showQuickPick(branchPick, { placeHolder: 'Select branch' }).then((branch) => {
+                                                if (branch) {                                                    
+                                                    git(folderPath).checkout([branch, '--track', '--force']);
+                                                    progressStep(branch + " checked out in " + folderPath, progressMarker);        
+                                                }
+                                            });    
+                                        }
+    
+                                        progressEnd(progressMarker);
+                                        deferred.resolve();                                                                                                           
+                                    });
+                                });
+                            }
+                        );
+                    });
+                });
+            }
+
+            progressEnd(progressMarker);
+            deferred.resolve();                    
+        })
+        .catch(function (error) {
+            progressStepFail('No matching git hives found', progressMarker);
+            progressStepFail(error, progressMarker);
+            deferred.reject();
+        });    
+    }
+
+    return deferred.promise;
+}
+
+
+/**
  * build the nest
  */
 function buildNest(nest, progressMarker) : any
@@ -1642,7 +1876,7 @@ function scaffoldNest(key, nest, dockerMachineIP, progressMarker) : any
                                 deferred.resolve(result);
                             })
                             .catch(function (error) {
-                                progressStepFail(nest.container_name + ' project create failed [' + JSON.stringify(error) + ']', progressMarker);
+                                progressStepFail(nest.container_name + ' project create failed', progressMarker);
                                 deferred.reject(result);
                                 return;
                             });     
@@ -1756,16 +1990,7 @@ function setupGit(rootFolder, nestSettings, progressMarker)
             }
 
             hidefile.hide(path.resolve(rootFolder, 'contact_key'));            
-
-            try
-            {
-                fs.chmodSync("'" + path.resolve(rootFolder, '.contact_key') + "'", '700');
-            }
-            catch(e)
-            {
-                // Throws "ENOENT: no such file or directory" error on windows.
-                //progressStep("Chmod " + e, progressMarker);
-            }
+            ensureSshPermissions(rootFolder);
 
             var treeKeyPath = path.resolve(rootFolder, '.tree_key');
             var contactKeyPath = path.resolve(rootFolder, '.contact_key');
@@ -1809,7 +2034,7 @@ function integrateGit(gitFolder, progressMarker)
     }
 
     var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
-    var gitInit = `git config --local core.sshCommand "ssh -F ${gitConfigPath}" && git config --local core.fileMode false`.replace(/\\/g,"/");
+    var gitInit = `git config --local core.sshcommand "ssh -F ${gitConfigPath}" && git config --local core.fileMode false`.replace(/\\/g,"/");
 
     exec(gitInit, { 'cwd' : gitFolder},
         (error, stdout, stderr) => {
@@ -2280,112 +2505,93 @@ function forceDownloadDebugger(context) : any {
  */
 function offerGitCheckout(isStarting) : any {
 
-    if (!isInstalled())
-    {
-        // not yet installed
-        return;
-    }
-
     const workspace = vscode.workspace;
-    
+    let deferred = Q.defer();
+
     function doShared(thisSharedPath)
     {
-        git(thisSharedPath).branch(function (err, branchSummary) {
-            var doCheckout = false;
+        getGitFolderBranches('shared')
+        .then(function (branchPick) {
+            branchPick.push('None');
+            vscode.window.showQuickPick(branchPick, { placeHolder: 'Checkout Shared?' }).then((branch) => {
+                if (branch && branch !== 'None') {                                                    
+                    git(thisSharedPath).checkout([branch, '--track', '--force']);
+                }
+            });                                
+        })
+        .catch(function (error) {
+            deferred.reject();                    
+        });  
+    }
 
-            if (isStarting)
-            {
-                if (branchSummary.current === "")
-                {
-                    doCheckout = true;
-                }    
-            }
-            else
+    git(workspace.rootPath).branch(function (err, branchSummary) {
+        var doCheckout = false;
+        if (isStarting)
+        {
+            if (branchSummary.current === "")
             {
                 doCheckout = true;
-            }
-
-            if (doCheckout)
-            {
-                let sharedPick = ['None'];
-
-                Object.keys(branchSummary.all).forEach(function(branch, index) {
-                    if (branchSummary.all[branch].search('shared') > 0)
-                    {
-                        sharedPick.push(branchSummary.all[branch]);
-                    }
-                });
-                
-                vscode.window.showQuickPick(sharedPick, { placeHolder: 'Checkout Shared?' }).then((branch) => {
-                    if (branch && branch !== 'None') {                                                    
-                        git(thisSharedPath).checkout([branch, '--track', '--force']);
-                    }
-                });                            
             }    
-        });        
-    }
-
-    if (path.basename(workspace.rootPath) === 'shared')
-    {
-        doShared(workspace.rootPath);
-    }
-    else
-    {
-        const nestProject = getNestProject();
-        if (nestProject === null)
-        {       
-            return false;
+        }
+        else
+        {
+            doCheckout = true;      
         }
 
-        git(workspace.rootPath).branch(function (err, branchSummary) {
-            var doCheckout = false;
-            if (isStarting)
+        if (doCheckout)
+        {
+            if (path.basename(workspace.rootPath) === 'shared')
             {
-                if (branchSummary.current === "")
-                {
-                    doCheckout = true;
-                }    
+                // this is the shared folder
+                doShared(workspace.rootPath);
             }
             else
             {
-                doCheckout = true;      
+                // this is a nest project folder yet another type of 
+                // folder user created folder exist but that is always
+                // checked out when created.
+                const nestProject = getNestProject(false);
+                if (nestProject !== null)
+                {
+                    getGitFolderBranches(nestProject.environment['NEST_TAG'])
+                    .then(function (branchPick) {
+                        branchPick.push('None');
+        
+                        vscode.window.showQuickPick(branchPick, { placeHolder: 'Checkout?' }).then((branch) => {
+                            if (branch && branch !== 'None') {
+                                git(workspace.rootPath).checkout([branch, '--track', '--force']);
+            
+                                const rootFolder = getRootFolder();
+                                if (!rootFolder)
+                                {
+                                    deferred.resolve();                            
+                                    return deferred.promise;
+                                }
+            
+                                var thisSharedPath = path.resolve(rootFolder, 'source');
+                                thisSharedPath = path.resolve(thisSharedPath, 'shared');
+                                
+                                if (isStarting)
+                                {
+                                    // if first time set shared too ..
+                                    doShared(thisSharedPath);
+                                }
+                            }
+                        });                                
+                    })
+                    .catch(function (error) {
+                        deferred.reject();                    
+                    });        
+                }        
             }
+        }
 
-            if (doCheckout)
-            {                
-                let projectPick = ['None'];
-    
-                Object.keys(branchSummary.all).forEach(function(branch, index) {
-                    if (branchSummary.all[branch].search(nestProject.environment['NEST_TAG']) > 0)
-                    {
-                        projectPick.push(branchSummary.all[branch]);
-                    } 
-                });
-    
-                vscode.window.showQuickPick(projectPick, { placeHolder: 'Checkout?' }).then((branch) => {
-                    if (branch && branch !== 'None') {
-                        git(workspace.rootPath).checkout([branch, '--track', '--force']);
-    
-                        const rootFolder = getRootFolder();
-                        if (!rootFolder)
-                        {
-                            return;
-                        }
-    
-                        var thisSharedPath = path.resolve(rootFolder, 'source');
-                        thisSharedPath = path.resolve(thisSharedPath, 'shared');
-                        
-                        if (isStarting)
-                        {
-                            // if first time set shared too ..
-                            doShared(thisSharedPath);
-                        }
-                    }
-                });                         
-            }               
-        });
-    }
+        deferred.resolve();
+    });
+
+    return deferred.promise;
 }
+
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -2398,8 +2604,27 @@ export function activate(context: vscode.ExtensionContext) {
     try {
         createNotifiers();
         checkDebugger(context);
-        offerGitCheckout(true);
-        
+
+        /* todo: the branch selection dialog gets refershed 
+            over when opening the IDE. need to trap to the event after
+            the window is open and settled.
+        context.subscriptions.push(
+            vscode.window.onDidChangeActiveTextEditor(
+                function (e: any)
+                {
+                    if (isInstalled())
+                    {
+                        showProgress(offerGitCheckout(true));
+                    }                 
+                })
+        );
+        */
+
+       if (isInstalled())
+       {
+           showProgress(offerGitCheckout(true));
+       }                 
+
         let debugDisposable = vscode.commands.registerCommand('nester.debug', () => { return debug(context); });
 
         let dataUpDisposable = vscode.commands.registerCommand('nester.dataup', () => { return showProgress(dataUp); });
@@ -2416,6 +2641,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         let kickciDisposable = vscode.commands.registerCommand('nester.kickci', () => { return showProgress(kickCi); });
         let kickcdDisposable = vscode.commands.registerCommand('nester.kickcd', () => { return showProgress(kickCd); });
+
+        let foldercreateDisposable = vscode.commands.registerCommand('nester.foldercreate', () => { return showProgress(folderCreate); });
+        let folderfetchDisposable = vscode.commands.registerCommand('nester.folderfetch', () => { return showProgress(folderFetch); });
 
         let selectDisposable = vscode.commands.registerCommand('nester.select', () => select( ) );
         let cleanDisposable = vscode.commands.registerCommand('nester.clean', () => { return showProgress(clean); });
@@ -2443,6 +2671,8 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(deployDisposable);
         context.subscriptions.push(kickciDisposable);
         context.subscriptions.push(kickcdDisposable);
+        context.subscriptions.push(foldercreateDisposable);
+        context.subscriptions.push(folderfetchDisposable);
         context.subscriptions.push(selectDisposable);
         context.subscriptions.push(cleanDisposable);
         context.subscriptions.push(clearDisposable);

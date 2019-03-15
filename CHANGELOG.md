@@ -88,3 +88,6 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Fixed path with spaces requiring double quotes when docker-compose cli
 - Few structural changes and cleanups
 
+## [1.5.8] - 2019-03-08
+### Added
+- The ability to add and fetch nest folders
