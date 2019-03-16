@@ -2,7 +2,7 @@
   "name": "nester-develop",
   "displayName": "Nester Develop",
   "description": "Develop dotnet core apps for the nest.yt PaaS on your desktop",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "publisher": "inkton",
   "icon": "images/nester-develop.png",
   "engines": {
@@ -27,6 +27,8 @@
     "onCommand:nester.deploy",
     "onCommand:nester.kickci",
     "onCommand:nester.kickcd",
+    "onCommand:nester.foldercreate",
+    "onCommand:nester.folderfetch",
     "onCommand:nester.restore",
     "onCommand:nester.coreclrdown",
     "onCommand:nester.scaffoldup",
@@ -1015,6 +1017,14 @@
       {
         "command": "nester.kickcd",
         "title": "Nest Kick Cd"
+      },
+      {
+        "command": "nester.foldercreate",
+        "title": "Nest Folder Create"
+      },
+      {
+        "command": "nester.folderfetch",
+        "title": "Nest Folder Fetch"
       },
       {
         "command": "nester.restore",
