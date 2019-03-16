@@ -1280,7 +1280,6 @@ function reset() : any
                     .then(function (value) {
                         saveNestSettings(rootFolder, nestSettings, progressMarker)
                         .then(function (value) {
-                            progressStep("Nest projects setup.", progressMarker);
                             progressEnd(progressMarker);
                             deferred.resolve(nestProject);
                         })
@@ -1672,7 +1671,7 @@ async function folderCreate() : Promise<void> {
                         throw err;
                     }
                     git(folderPath).init(function() {
-                        var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
+                        var gitConfigPath = path.resolve(rootFolder, '.ssh_config').replace(/\\/g,"/");
                         const appNest = nestSettings['app'];
     
                         git(folderPath)
@@ -1756,7 +1755,7 @@ async function folderFetch() : Promise<void> {
                         throw err;
                     }
                     git(folderPath).init(function() {
-                        var gitConfigPath = path.resolve(rootFolder, '.ssh_config');
+                        var gitConfigPath = path.resolve(rootFolder, '.ssh_config').replace(/\\/g,"/");
                         const appNest = nestSettings['app'];
     
                         git(folderPath)
@@ -2204,7 +2203,6 @@ function scaffoldUp() : any
                         progressStep("Saving nest settings ...", progressMarker);
                         saveNestSettings(rootFolder, nestSettings, progressMarker)
                             .then(function (value) {
-                                progressStep("Nest projects setup.", progressMarker);
                                 progressEnd(progressMarker);
                                 deferred.resolve(nestSettings);
                             })
