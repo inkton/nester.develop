@@ -1235,9 +1235,9 @@ function reset() : any
 
         var theDevkit = devkit(rootFolder);
 
-        progressStep("Setting shared services ...", progressMarker);
+        progressStep("Re-starting services ...", progressMarker);
         
-        exec('docker-compose --file "'+ theDevkit +'" up -d', { 'cwd' : rootFolder },
+        exec('docker-compose --file "'+ theDevkit +'" restart', { 'cwd' : rootFolder },
             (error, stdout, stderr) => {
 
             if (error !== null) {
