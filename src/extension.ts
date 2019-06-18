@@ -1199,14 +1199,21 @@ function clean() : any {
  */
 function reset() : any
 {
-    let deferred = Q.defer();
     var progressMarker = progressStart("reset");
+    let deferred = Q.defer();
 
-    const nestProject = getNestProject();
-    if (nestProject === null)
+    const rootFolder = getRootFolder();
+    if (!rootFolder)
     {
         deferred.reject();
-        return deferred.promise;
+        return deferred.promise;    
+    }
+
+    if (getNestProject(false) !== null)
+    {
+        vscode.window.showErrorMessage('Run the reset command from the root folder.');
+        deferred.reject();
+        return deferred.promise;    
     }
 
     var nestSettings = getNestSettings();
@@ -1216,8 +1223,6 @@ function reset() : any
         deferred.reject();
         return deferred.promise;
     }
-
-    const rootFolder = getRootFolder();
 
     exec('docker-machine ip',
         (error, stdout, stderr) => {
@@ -1243,7 +1248,7 @@ function reset() : any
             if (error !== null) {
                 progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);
                 progressStepFail(stderr, progressMarker);
-                deferred.reject(nestProject);
+                deferred.reject(nestSettings);
                 return;
             }
 
@@ -1251,7 +1256,7 @@ function reset() : any
                 stderr.indexOf('error while creating mount source path') > -1 )
             {
                 progressStepFail("Enable shared drives in Docker settings", progressMarker);
-                deferred.reject(nestProject);
+                deferred.reject(nestSettings);
                 return;
             }
             
@@ -1265,7 +1270,8 @@ function reset() : any
             Object.keys(nestSettings['byKey']).forEach(function(key, index) {
                 if (nestSettings['byKey'][key].environment['NEST_TAG'])
                 {
-                    services.push(buildNest(nestSettings['byKey'][key], progressMarker));
+                    services.push(resetNest(key, nestSettings['byKey'][key], 
+                        dockerMachineIP, progressMarker));
                 }
                 else if (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
                 {
@@ -1276,22 +1282,46 @@ function reset() : any
             });
 
             Q.allSettled(services).done(function (results) {
-                createNestProject(nestProject, progressMarker)
-                    .then(function (value) {
-                        saveNestSettings(rootFolder, nestSettings, progressMarker)
-                        .then(function (value) {
-                            progressEnd(progressMarker);
-                            deferred.resolve(nestProject);
-                        })
-                        .catch(function (error) {
-                            progressStepFail(error, progressMarker);
-                            deferred.reject();
-                        });
-                    })
-                    .catch(function (error) {
-                        progressStepFail(error, progressMarker);
-                        deferred.reject();
-                    });
+                
+                // The docker port numbers have changed and they are 
+                // under the "byKey" branch. Make sure the app and worker
+                // branches are updated to the updated port nos
+
+                Object.keys(nestSettings['byKey']).forEach(function(key, index) {
+                    switch (nestSettings['byKey'][key].environment['NEST_PLATFORM_TAG'])
+                    {
+                        case 'mvc':
+                        case 'api': 
+                            nestSettings['app'].environment['NEST_HTTP_PORT']
+                                = nestSettings['byKey'][key].environment['NEST_HTTP_PORT'];
+                            break;
+                        case 'worker':
+                            nestSettings['workers'][key].environment['NEST_HTTP_PORT']
+                                = nestSettings['byKey'][key].environment['NEST_HTTP_PORT'];
+                            break;
+                    }        
+                    switch (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
+                    {
+                        case 'build':
+                        case 'storage':
+                        case 'batch':
+                        {
+                            nestSettings['services'][nestSettings['byKey'][key].environment['NEST_APP_SERVICE']].environment['NEST_SERVICE_VIEW_PORT']
+                                = nestSettings['byKey'][key].environment['NEST_SERVICE_VIEW_PORT'];
+                            break;
+                        }
+                    }
+                });                
+
+                saveNestSettings(rootFolder, nestSettings, progressMarker)
+                .then(function (value) {
+                    progressEnd(progressMarker);
+                    deferred.resolve(nestSettings);
+                })
+                .catch(function (error) {
+                    progressStepFail(error, progressMarker);
+                    deferred.reject();
+                });
             });
         });
     });
@@ -1949,6 +1979,54 @@ function scaffoldService(key, nest, dockerMachineIP, progressMarker) : any
         // done!
         result.success = true;
         deferred.resolve(result);
+    });
+
+    return deferred.promise;
+}
+
+/**
+ * reset nesst
+ */
+function resetNest(key, nest, dockerMachineIP, progressMarker) : any
+{
+    let deferred = Q.defer();
+    let result = new DeferredResult(nest);
+
+    nest.environment['NEST_DOCKER_MACHINE_IP'] = dockerMachineIP;
+    progressStep("Attaching " + nest.container_name + ", this may take a minute or two ...", progressMarker);
+
+    runCommand(nest, ['app', 'attach'], progressMarker)
+        .then(function () {
+
+        progressStep("Attach ok ... pulling from production " + nest.container_name, progressMarker);
+                    
+        buildNest(nest, progressMarker)
+            .then(function () {
+
+                progressStep("Building of " + nest.container_name + " now complete, now creating nest project config ..", progressMarker);
+
+                createNestProject(nest, progressMarker)
+                    .then(function () {
+                        // done!                                
+                        progressStep("Nest project for " + nest.container_name + " created.", progressMarker);
+                        result.success = true;
+                        deferred.resolve(result);
+                    })
+                    .catch(function (error) {
+                        progressStepFail(nest.container_name + ' project create failed', progressMarker);
+                        deferred.reject(result);
+                        return;
+                    });     
+            })
+            .catch(function (error) {
+                progressStepFail(error, progressMarker);
+                deferred.reject(result);
+            });
+    })
+    .catch(function (error) {
+        progressStepFail('Attach failed [' + error + ']', progressMarker);
+        deferred.reject(result);
+        return;
     });
 
     return deferred.promise;
