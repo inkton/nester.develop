@@ -1242,7 +1242,7 @@ function reset() : any
 
         progressStep("Re-starting services ...", progressMarker);
         
-        exec('docker-compose --file "'+ theDevkit +'" restart', { 'cwd' : rootFolder },
+        exec('docker-compose --file "'+ theDevkit +'" down', { 'cwd' : rootFolder },
             (error, stdout, stderr) => {
 
             if (error !== null) {
@@ -1251,76 +1251,80 @@ function reset() : any
                 deferred.reject(nestSettings);
                 return;
             }
-
-            if(stdout.indexOf('error while creating mount source path') > -1 ||
-                stderr.indexOf('error while creating mount source path') > -1 )
-            {
-                progressStepFail("Enable shared drives in Docker settings", progressMarker);
-                deferred.reject(nestSettings);
-                return;
-            }
             
-            if (stdout !== null)
-            {
+            exec('docker-compose --file "'+ theDevkit +'" up -d', { 'cwd' : rootFolder },
+                (error, stdout, stderr) => {
+        
+                if (error !== null) {
+                    progressStep("Ensure docker is installed and is accessible from this environment", progressMarker);
+                    progressStepFail(stderr, progressMarker);
+                    deferred.reject();
+                    return;
+                }
+        
                 progressStep(stdout, progressMarker);
-            }
+                progressStep(stderr, progressMarker);
 
-            var services = [];
-
-            Object.keys(nestSettings['byKey']).forEach(function(key, index) {
-                if (nestSettings['byKey'][key].environment['NEST_TAG'])
-                {
-                    services.push(resetNest(key, nestSettings['byKey'][key], 
-                        dockerMachineIP, progressMarker));
-                }
-                else if (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
-                {
-                    progressStep("Discovering services ...", progressMarker);
-                    services.push(scaffoldService(key, nestSettings['byKey'][key], 
-                        dockerMachineIP, progressMarker));
-                }
-            });
-
-            Q.allSettled(services).done(function (results) {
-                
-                // The docker port numbers have changed and they are 
-                // under the "byKey" branch. Make sure the app and worker
-                // branches are updated to the updated port nos
+                var services = [];
 
                 Object.keys(nestSettings['byKey']).forEach(function(key, index) {
-                    switch (nestSettings['byKey'][key].environment['NEST_PLATFORM_TAG'])
+                    if (nestSettings['byKey'][key].environment['NEST_TAG'])
                     {
-                        case 'mvc':
-                        case 'api': 
-                            nestSettings['app'].environment['NEST_HTTP_PORT']
-                                = nestSettings['byKey'][key].environment['NEST_HTTP_PORT'];
-                            break;
-                        case 'worker':
-                            nestSettings['workers'][key].environment['NEST_HTTP_PORT']
-                                = nestSettings['byKey'][key].environment['NEST_HTTP_PORT'];
-                            break;
-                    }        
-                    switch (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
-                    {
-                        case 'build':
-                        case 'storage':
-                        case 'batch':
-                        {
-                            nestSettings['services'][nestSettings['byKey'][key].environment['NEST_APP_SERVICE']].environment['NEST_SERVICE_VIEW_PORT']
-                                = nestSettings['byKey'][key].environment['NEST_SERVICE_VIEW_PORT'];
-                            break;
-                        }
+                        services.push(resetNest(key, nestSettings['byKey'][key], 
+                            dockerMachineIP, progressMarker));
                     }
-                });                
+                    else if (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
+                    {
+                        progressStep("Discovering services ...", progressMarker);
+                        services.push(scaffoldService(key, nestSettings['byKey'][key], 
+                            dockerMachineIP, progressMarker));
+                    }
+                });
+    
+                Q.allSettled(services).done(function (results) {
+                    
+                    // The docker port numbers have changed and they are 
+                    // under the "byKey" branch. Make sure the app and worker
+                    // branches are updated to the updated port nos
+                                          
+                    Object.keys(nestSettings['byKey']).forEach(function(key) {
 
-                saveNestSettings(rootFolder, nestSettings, progressMarker)
-                .then(function (value) {
-                    progressEnd(progressMarker);
-                    deferred.resolve(nestSettings);
-                })
-                .catch(function (error) {
-                    progressStepFail(error, progressMarker);
-                    deferred.reject();
+                        if (typeof nestSettings['byKey'][key].environment['NEST_PLATFORM_TAG'] !== 'undefined')
+                        {
+                            switch (nestSettings['byKey'][key].environment['NEST_PLATFORM_TAG'])
+                            {
+                                case 'mvc':
+                                case 'api': 
+                                    nestSettings['app'].environment['NEST_HTTP_PORT']
+                                        = nestSettings['byKey'][key].environment['NEST_HTTP_PORT'];
+                                    break;
+                            }            
+                        }
+                        if (typeof nestSettings['byKey'][key].environment['NEST_APP_SERVICE'] !== 'undefined')
+                        {
+                            switch (nestSettings['byKey'][key].environment['NEST_APP_SERVICE'])
+                            {
+                                case 'build':
+                                case 'storage':
+                                case 'batch':
+                                {
+                                    nestSettings['services'][nestSettings['byKey'][key].environment['NEST_APP_SERVICE']].environment['NEST_SERVICE_VIEW_PORT']
+                                        = nestSettings['byKey'][key].environment['NEST_SERVICE_VIEW_PORT'];
+                                    break;
+                                }
+                            }    
+                        }
+                    });                
+    
+                    saveNestSettings(rootFolder, nestSettings, progressMarker)
+                    .then(function (value) {
+                        progressEnd(progressMarker);
+                        deferred.resolve(nestSettings);
+                    })
+                    .catch(function (error) {
+                        progressStepFail(error, progressMarker);
+                        deferred.reject();
+                    });                   
                 });
             });
         });
@@ -1999,7 +2003,7 @@ function resetNest(key, nest, dockerMachineIP, progressMarker) : any
         .then(function () {
 
         progressStep("Attach ok ... pulling from production " + nest.container_name, progressMarker);
-                    
+                  
         buildNest(nest, progressMarker)
             .then(function () {
 
@@ -2021,7 +2025,7 @@ function resetNest(key, nest, dockerMachineIP, progressMarker) : any
             .catch(function (error) {
                 progressStepFail(error, progressMarker);
                 deferred.reject(result);
-            });
+            }); 
     })
     .catch(function (error) {
         progressStepFail('Attach failed [' + error + ']', progressMarker);
