@@ -50,7 +50,7 @@
     "node-stream-zip": "1.7.0",
     "q": "^1.5.0",
     "remove-accents": "0.4.2",
-    "simple-git": "^1.107.0",
+    "simple-git": "^3.3.0",
     "tslint": "^5.12.1",
     "xml2js": "^0.4.17",
     "yamljs": "^0.2.10"
